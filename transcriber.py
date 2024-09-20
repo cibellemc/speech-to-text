@@ -28,7 +28,13 @@ class Transcription:
             # identify language
             audio = whisper.load_audio(self.audios[idx])
             audio = whisper.pad_or_trim(audio)
-            mel = whisper.log_mel_spectrogram(audio, n_mels=128).to(transcriber.device)
+
+            if whisper_model == 'large':
+                num_mels = 128
+            else:
+                num_mels = 80
+            
+            mel = whisper.log_mel_spectrogram(audio, n_mels=num_mels).to(transcriber.device)
             _, probs = transcriber.detect_language(mel)
             language = max(probs, key=probs.get)
 
