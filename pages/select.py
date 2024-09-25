@@ -1,7 +1,6 @@
+from sqlalchemy import text
 import streamlit as st
 from services.database import conn
-import pandas as pd
-
 
 # Função para baixar arquivos DOCX
 def download_transcription(file_name, transcription_text, index):
@@ -28,9 +27,20 @@ def download_transcription(file_name, transcription_text, index):
 
 # Realiza o SELECT no banco de dados para obter todas as transcrições
 def fetch_transcriptions():
+    
     query = "SELECT id, file_name, transcription, language, confidence_score FROM transcriptions;"
     df = conn.query(query, ttl="10m")
     return df
+
+def fetch_transcription_by_file_name(file_name):
+    
+    query = f"SELECT file_name FROM transcriptions WHERE file_name = {file_name};"
+    result = conn.query.fetchone()
+
+    if result:
+        return result[0]  # Retorna o primeiro elemento da tupla
+    else:
+        return None  # Retorna None se não encontrar o arquivo
 
 
 # Exibe as transcrições e permite baixar os arquivos

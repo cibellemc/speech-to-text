@@ -7,10 +7,12 @@ from datetime import datetime
 import pathlib
 import io
 import matplotlib.colors as mcolors
+from pages.select import fetch_transcription_by_file_name
 from transcriber import Transcription
 from services.database import conn
 
-# Inicializar conexão com PostgreSQL
+# st.sidebar.title("Your Desired Sidebar Title")
+# st.sidebar.header("Your Header Here")
 
 
 def save_transcription_to_db(file_name, transcription_text, language, confidence_score):
@@ -56,6 +58,8 @@ def upload_view():
             options=["tiny", "base", "small", "medium", "large"],
             index=4,
         )
+
+        # whisper_model = 'large'
 
         transcribe = st.form_submit_button(label="Iniciar")
 
@@ -144,8 +148,14 @@ def upload_view():
         )
         doc.save(save_dir + file_name)
 
-        # Salvar no banco de dados
-        save_transcription_to_db(file_name, text, language, confidence_score)
+        # print(type(file_name))
+
+        existing_transcription = fetch_transcription_by_file_name(file_name)     
+        # print("EXISTE: ", existing_transcription)
+        
+        if existing_transcription == None:
+            # Salvar no banco de dados
+            save_transcription_to_db(file_name, text, language, confidence_score)
 
         bio = io.BytesIO()
         doc.save(bio)
@@ -157,10 +167,8 @@ def upload_view():
                         mime="docx",
                     )
 
-
 def main():
     upload_view()
-
 
 if __name__ == "__main__":
     main()
