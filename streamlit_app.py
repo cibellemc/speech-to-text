@@ -11,18 +11,7 @@ from pages.select import fetch_transcription_by_file_name
 from transcriber import Transcription
 from services.database import conn
 
-# st.sidebar.title("Your Desired Sidebar Title")
-# st.sidebar.header("Your Header Here")
-
-
 def save_transcription_to_db(file_name, transcription_text, language, confidence_score):
-    # SQL query para inserir os dados na tabela
-    # insert_query = text(
-    #     """
-    #  (%s, %s, %s, %s);
-    # """
-    # )
-
     # Executa a query com os dados passados
     with conn.session as session:
         session.execute(
@@ -37,9 +26,6 @@ def save_transcription_to_db(file_name, transcription_text, language, confidence
             },
         )
         session.commit()  # Confirma a transação
-
-    # Executa a query com os dados
-
 
 def upload_view():
     st.title("Realize uma nova Transcrição")
@@ -59,31 +45,22 @@ def upload_view():
             index=4,
         )
 
-        # whisper_model = 'large'
-
+        # Botão para iniciar a transcrição
         transcribe = st.form_submit_button(label="Iniciar")
 
-    # Se o usuário clicar em "Iniciar" e houver arquivos carregados, a transcrição será inicializada
-    if transcribe:
-        if input_files:
-            st.session_state.transcription = Transcription(
-                input_files
-            )  # Uma classe que gerencia o processo de transcrição.
-            st.session_state.transcription.transcribe(
-                whisper_model
-            )  # Função para realizar a transcrição com base no modelo selecionado.
-        else:
-            st.error("Por favor, selecione um arquivo.")
+    # Se o botão "Iniciar" for clicado e houver arquivos carregados, iniciar o processo de transcrição
+    if transcribe and input_files:
+        st.session_state.transcription = Transcription(input_files)
+        st.session_state.transcription.transcribe(whisper_model)
+        st.session_state.transcription_complete = True  # Marcar que a transcrição foi concluída
 
-        # Se houver uma transcrição, renderize-a. Caso contrário, exiba instruções
-    if "transcription" in st.session_state:
+    # Se houver uma transcrição e a transcrição estiver completa
+    if st.session_state.get('transcription_complete', False):
         for i, output in enumerate(st.session_state.transcription.output):
             doc = docx.Document()
             avg_confidence_score = 0
             amount_words = 0
-            save_dir = (
-                str(pathlib.Path(__file__).parent.absolute()) + "/transcripts/"
-            )
+            save_dir = str(pathlib.Path(__file__).parent.absolute()) + "/transcripts/"
 
             # Verifica se o diretório existe, caso contrário, cria-o
             if not os.path.exists(save_dir):
@@ -91,13 +68,15 @@ def upload_view():
 
             st.markdown(f"#### Transcrição de {output['name']}")
             for idx, segment in enumerate(output["segments"]):
-                for w in output["segments"][idx]["words"]: amount_words += 1
+                for w in output["segments"][idx]["words"]:
+                    amount_words += 1
                 avg_confidence_score += w["probability"]
                 confidence_score = round(avg_confidence_score / amount_words, 3)
                 language = output["language"]
 
-            st.markdown(f"_(modelo Whisper:_`{whisper_model}` -  _idioma:_ `{language}` -  _⌀ índice de confiança:_ `{confidence_score}`)"
-                )
+            st.markdown(
+                f"_(modelo Whisper:_`{whisper_model}` -  _idioma:_ `{language}` -  _⌀ índice de confiança:_ `{confidence_score}`)"
+            )
 
             prev_word_end = -1
             text = ""
@@ -119,9 +98,7 @@ def upload_view():
 
                         if color_coding:
                             rgba_color = cmap(w["probability"])
-                            rgb_color = tuple(
-                                round(x * 255) for x in rgba_color[:3]
-                            )
+                            rgb_color = tuple(round(x * 255) for x in rgba_color[:3])
                         else:
                             rgb_color = (0, 0, 0)
                         html_text += (
@@ -148,11 +125,9 @@ def upload_view():
         )
         doc.save(save_dir + file_name)
 
-        # print(type(file_name))
+        # Verifica se a transcrição já existe no banco de dados
+        existing_transcription = fetch_transcription_by_file_name(file_name)
 
-        existing_transcription = fetch_transcription_by_file_name(file_name)     
-        # print("EXISTE: ", existing_transcription)
-        
         if existing_transcription == None:
             # Salvar no banco de dados
             save_transcription_to_db(file_name, text, language, confidence_score)
@@ -161,11 +136,14 @@ def upload_view():
         doc.save(bio)
 
         st.download_button(
-                        label="Baixar Transcrição",
-                        data=bio.getvalue(),
-                        file_name=file_name,
-                        mime="docx",
-                    )
+            label="Baixar Transcrição",
+            data=bio.getvalue(),
+            file_name=file_name,
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+        # Reseta o estado para evitar que a transcrição seja processada novamente
+        st.session_state.transcription_complete = False
 
 def main():
     upload_view()

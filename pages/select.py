@@ -33,10 +33,17 @@ def fetch_transcriptions():
     return df
 
 def fetch_transcription_by_file_name(file_name):
+    with conn.session as session:
+        result = session.execute(
+            text(
+                "SELECT file_name FROM transcriptions WHERE file_name = :file_name;"
+            ),
+            {
+                "file_name": file_name,
+            },
+        ).fetchone()  # Aqui você pega a primeira linha correspondente
     
-    query = f"SELECT file_name FROM transcriptions WHERE file_name = {file_name};"
-    result = conn.query.fetchone()
-
+    # Se o resultado for encontrado, retorna o valor do 'file_name'
     if result:
         return result[0]  # Retorna o primeiro elemento da tupla
     else:
