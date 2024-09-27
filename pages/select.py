@@ -28,7 +28,7 @@ def download_transcription(file_name, transcription_text, index):
 # Realiza o SELECT no banco de dados para obter todas as transcrições
 def fetch_transcriptions():
     
-    query = "SELECT id, file_name, transcription, language, confidence_score FROM transcriptions;"
+    query = "SELECT id, file_name, transcription, model FROM transcriptions;"
     df = conn.query(query, ttl="10m")
     return df
 
@@ -52,24 +52,50 @@ def fetch_transcription_by_file_name(file_name):
 
 # Exibe as transcrições e permite baixar os arquivos
 def display_transcriptions():
-    st.title("Transcrições Disponíveis para Download")
+    st.title("Transcrições para Download")
+
+    st.info("As transcrições são salvas no padrão ``nome_do_audio.mp4-modelo-data_de_upload.docx``. Ao realizar a busca, lembre-se que há separação por hífen.")
 
     # Busca as transcrições no banco de dados
     transcriptions_df = fetch_transcriptions()
 
     if not transcriptions_df.empty:
-        # Exibe uma tabela com as transcrições
-        # st.dataframe(transcriptions_df[['file_name', 'language', 'confidence_score']])
+        search_term = st.text_input("Buscar por nome de arquivo ou data")
 
-        # Itera por cada transcrição e cria um botão de download
-        for index, row in transcriptions_df.iterrows():
-            st.markdown(f"### {row['file_name']}")
-            st.markdown(
-                f"**Idioma**: {row['language']}, **Confiança**: {row['confidence_score']}"
-            )
 
-            # Chama a função para download do arquivo
-            download_transcription(row["file_name"], row["transcription"], index)
+        # Filtra a tabela com base no termo de busca
+        filtered_df = transcriptions_df[
+            transcriptions_df['file_name'].str.contains(search_term, case=False, na=False)
+        ]
+
+        if not filtered_df.empty:
+            # Cabeçalhos da tabela
+            # st.markdown("### Lista de Transcrições")
+            st.divider()
+            cols_header = st.columns([3, 2])  # Configura colunas para Nome, Download, Confiança
+            cols_header[0].markdown("**Nome do Arquivo**")
+            cols_header[1].markdown("**Download**")
+            # cols_header[2].markdown("**Confiabilidade**")
+
+            # Itera por cada transcrição filtrada e exibe na tabela
+            for index, row in filtered_df.iterrows():
+                file_name = row["file_name"]
+                # confidence_score = row["confidence_score"]
+
+                # Cria uma linha com três colunas para cada item
+                cols = st.columns([3, 2])  # Mesmo layout das colunas
+
+                # Nome do arquivo
+                cols[0].markdown(f"{file_name}")
+
+                # Botão de download
+                with cols[1]:
+                    download_transcription(file_name, row["transcription"], index)
+
+                # Índice de confiabilidade
+                # cols[2].markdown(f"{confidence_score:.2f}")
+        else:
+            st.warning("Nenhuma transcrição encontrada.")
     else:
         st.warning("Nenhuma transcrição disponível.")
 
