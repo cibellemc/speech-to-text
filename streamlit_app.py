@@ -12,6 +12,54 @@ from transcriber import Transcription
 from services.database import conn
 
 
+def _style_language_uploader():
+    languages = {
+        "PT-BR": {
+            "button": "Selecionar arquivos",
+            "instructions": "Arraste e solte os arquivos aqui",
+            "limits": "Limite de 200MB por arquivo | MP4, M4A, MP3, WAV",
+        },
+    }
+
+    hide_label = (
+        """
+        <style>
+            div[data-testid="stFileUploader"]>section[data-testid="stFileUploaderDropzone"]>button[data-testid="baseButton-secondary"] {
+               color:white;
+            }
+            # div[data-testid="stFileUploader"]>section[data-testid="stFileUploaderDropzone"]>button[data-testid="baseButton-secondary"]::after {
+            #     content: "BUTTON_TEXT";
+            #     color:black;
+            #     display: block;
+            #     position: absolute;
+            # }
+            div[data-testid="stFileUploaderDropzoneInstructions"]>div>span {
+               visibility:hidden;
+            }
+            div[data-testid="stFileUploaderDropzoneInstructions"]>div>span::after {
+               content:"INSTRUCTIONS_TEXT";
+               visibility:visible;
+               display:block;
+            }
+             div[data-testid="stFileUploaderDropzoneInstructions"]>div>small {
+               visibility:hidden;
+            }
+            div[data-testid="stFileUploaderDropzoneInstructions"]>div>small::before {
+               content:"FILE_LIMITS";
+               visibility:visible;
+               display:block;
+            }
+        </style>
+        """.replace(
+            "BUTTON_TEXT", languages.get("PT-BR").get("button")
+        )
+        .replace("INSTRUCTIONS_TEXT", languages.get("PT-BR").get("instructions"))
+        .replace("FILE_LIMITS", languages.get("PT-BR").get("limits"))
+    )
+
+    st.markdown(hide_label, unsafe_allow_html=True)
+
+
 def save_transcription_to_db(file_name, transcription_text, model):
     # Executa a query com os dados passados
     with conn.session as session:
@@ -131,7 +179,7 @@ def upload_view():
         existing_transcription = fetch_transcription_by_file_name(file_name)
 
         if existing_transcription == None:
-            
+
             # Salvar no banco de dados
             save_transcription_to_db(file_name, text, whisper_model)
 
@@ -147,6 +195,9 @@ def upload_view():
 
 
 def main():
+
+    _style_language_uploader()
+
     st.sidebar.subheader("Navegação no sistema")
 
     st.sidebar.markdown(
