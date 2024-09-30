@@ -1,62 +1,57 @@
 import whisper
 from tempfile import NamedTemporaryFile
+from pyannote.audio import Pipeline
+# from pyannote_whisper.utils import diarize_text
 
+pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization",
+                                    use_auth_token="your/token")
 
 class Transcription:
-    def __init__(self, source: list):
-        self.source = source
-        self.audios = []
+    def __init__(self, file):
+        self.audio = None
+        self.output = []  # Inicializa a variável self.output como uma lista vazia
 
-        for file in self.source:
-            with NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-                tmp_file.write(file.getvalue())
-                self.audios.append(tmp_file.name)
+        with NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+            tmp_file.write(file.getvalue())
+            self.audio = tmp_file.name
 
-    def transcribe(
-        self,
-        whisper_model: str,
-        translation: bool,
-    ):
-
-        # get whisper model
+    def transcribe(self, whisper_model: str, num_speakers: int):
+        # Carrega o modelo Whisper
         transcriber = whisper.load_model(whisper_model)
 
-        self.output = []
+        # Identifica o idioma
+        # audio = whisper.load_audio(self.audio)
+        # audio = whisper.pad_or_trim(audio)
 
-        for idx, _ in enumerate(self.audios):
+        # if whisper_model == 'large':
+        #     num_mels = 128
+        # else:
+        #     num_mels = 80
+        
+        # mel = whisper.log_mel_spectrogram(audio, n_mels=num_mels).to(transcriber.device)
+        # _, probs = transcriber.detect_language(mel)
+        language = "pt" # max(probs, key=probs.get)
 
-            # identify language
-            audio = whisper.load_audio(self.audios[idx])
-            audio = whisper.pad_or_trim(audio)
+        # Realiza a transcrição
+        self.raw_output = transcriber.transcribe(
+            self.audio,
+            language=language,
+            verbose=True,
+            word_timestamps=True
+        )
 
-            if whisper_model == 'large':
-                num_mels = 128
-            else:
-                num_mels = 80
-            
-            mel = whisper.log_mel_spectrogram(audio, n_mels=num_mels).to(transcriber.device)
-            _, probs = transcriber.detect_language(mel)
-            language = max(probs, key=probs.get)
+        # diarization_result = pipeline(self.audio, num_speakers=num_speakers)
+        # # final_result = diarize_text(self.raw_output, diarization_result)
 
-            self.raw_output = transcriber.transcribe(
-                self.audios[idx],
-                language=language,
-                verbose=True,
-                word_timestamps=True
-            )
-            if(translation):
-                self.translation = transcriber.transcribe(
-                    self.audios[idx],
-                    language=language,
-                    verbose=True,
-                    word_timestamps=True,
-                    task='translate'
-                )["text"]
-                self.raw_output["translation"] = self.translation
-            self.segments = self.raw_output["segments"]
-            for segment in self.raw_output["segments"]:
-                del segment["tokens"]
-            self.raw_output.update(
-                name=self.source[idx].name, language=language)
-            self.output.append(self.raw_output)
-            print(self.output)
+        # print("************")
+        # print(diarization_result)
+
+        # Limpa tokens e organiza os dados da transcrição
+        self.segments = self.raw_output["segments"]
+        for segment in self.raw_output["segments"]:
+            del segment["tokens"]
+
+        # self.raw_output.update(name="audio.wav", language=language)
+        self.output.append(self.raw_output)
+
+        return self.output

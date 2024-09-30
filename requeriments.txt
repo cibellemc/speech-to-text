@@ -1,0 +1,6 @@
+streamlit
+python-docx
+sqlalchemy
+psycopg2-binary
+matplotlib
+openai-whisper
