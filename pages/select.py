@@ -2,6 +2,7 @@ from sqlalchemy import text
 import streamlit as st
 from services.database import conn
 
+
 # Função para baixar arquivos DOCX
 def download_transcription(file_name, transcription_text, index):
     import io
@@ -27,22 +28,21 @@ def download_transcription(file_name, transcription_text, index):
 
 # Realiza o SELECT no banco de dados para obter todas as transcrições
 def fetch_transcriptions():
-    
-    query = "SELECT id, file_name, transcription, model FROM transcriptions;"
+
+    query = "SELECT id, file_name, transcription, model FROM transcriptions ORDER BY created_at DESC;"
     df = conn.query(query, ttl="10m")
     return df
+
 
 def fetch_transcription_by_file_name(file_name):
     with conn.session as session:
         result = session.execute(
-            text(
-                "SELECT file_name FROM transcriptions WHERE file_name = :file_name;"
-            ),
+            text("SELECT file_name FROM transcriptions WHERE file_name = :file_name;"),
             {
                 "file_name": file_name,
             },
         ).fetchone()  # Aqui você pega a primeira linha correspondente
-    
+
     # Se o resultado for encontrado, retorna o valor do 'file_name'
     if result:
         return result[0]  # Retorna o primeiro elemento da tupla
@@ -54,7 +54,9 @@ def fetch_transcription_by_file_name(file_name):
 def display_transcriptions():
     st.title("Transcrições para Download")
 
-    st.info("As transcrições são salvas no padrão ``nome_do_audio.mp4-modelo-data_de_upload.docx``. Ao realizar a busca, lembre-se que há separação por hífen.")
+    st.info(
+        "As transcrições são salvas no padrão ``nome_do_audio.mp4-modelo-data_de_upload.docx``. Ao realizar a busca, lembre-se que há separação por hífen."
+    )
 
     # Busca as transcrições no banco de dados
     transcriptions_df = fetch_transcriptions()
@@ -62,17 +64,20 @@ def display_transcriptions():
     if not transcriptions_df.empty:
         search_term = st.text_input("Buscar por nome de arquivo ou data")
 
-
         # Filtra a tabela com base no termo de busca
         filtered_df = transcriptions_df[
-            transcriptions_df['file_name'].str.contains(search_term, case=False, na=False)
+            transcriptions_df["file_name"].str.contains(
+                search_term, case=False, na=False
+            )
         ]
 
         if not filtered_df.empty:
             # Cabeçalhos da tabela
             # st.markdown("### Lista de Transcrições")
             st.divider()
-            cols_header = st.columns([3, 2])  # Configura colunas para Nome, Download, Confiança
+            cols_header = st.columns(
+                [3, 2]
+            )  # Configura colunas para Nome, Download, Confiança
             cols_header[0].markdown("**Nome do Arquivo**")
             cols_header[1].markdown("**Download**")
             # cols_header[2].markdown("**Confiabilidade**")

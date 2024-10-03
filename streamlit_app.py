@@ -8,8 +8,8 @@ import pathlib
 import io
 import matplotlib.colors as mcolors
 from pages.select import display_transcriptions, fetch_transcription_by_file_name
-from transcriber import Transcription
 from services.database import conn
+from transcriber import transcribe
 
 
 def _style_language_uploader():
@@ -87,6 +87,19 @@ def upload_view():
         "Os modelos de transcrição vão do ``tiny`` ao ``large``. Quanto maior a precisão/confiabilidade (mais próximo de ``large``), mais tempo será necessário para processar sua solicitação."
     )
 
+    speaker_colors = {
+        "SPEAKER 1": "FF0000",  # Vermelho
+        "SPEAKER 2": "00FF00",  # Verde
+        "SPEAKER 3": "0000FF",  # Azul
+        "SPEAKER 4": "FFFF00",  # Amarelo
+        "SPEAKER 5": "FF00FF",  # Magenta
+        "SPEAKER 6": "00FFFF",  # Ciano
+        "SPEAKER 7": "FFA500",  # Laranja
+        "SPEAKER 8": "800080",  # Roxo
+        "SPEAKER 9": "808080",  # Cinza
+        "SPEAKER 10": "000000",  # Preto
+    }
+
     # Formulário para upload de arquivo e seleção de modelo
     with st.form("input_form"):
         input_file = st.file_uploader(
@@ -107,91 +120,79 @@ def upload_view():
             "Quantidade de falantes", min_value=1, max_value=10
         )
 
-        transcribe = st.form_submit_button(label="Iniciar")
+        btn_transcribe = st.form_submit_button(label="Iniciar")
 
-    if transcribe:
-
+    if btn_transcribe:
         # Se o usuário clicar em "Iniciar" e houver arquivos carregados, a transcrição será inicializada
         if input_file:
             # print(input_file.name)
             with st.spinner("Transcrevendo o áudio..."):
-                transcription = Transcription(input_file)
-                transcription_output = transcription.transcribe(whisper_model, num_speakers)
+                segments = transcribe(input_file, whisper_model, num_speakers)
 
             st.success("Transcrição finalizada!")
 
-            # Exibe a transcrição colorida
-            # st.markdown("### Transcrição:")
-            for output in transcription_output:
-                # print(output['name'])
+            st.markdown("### Transcrição:")
 
-                doc = docx.Document()
-                save_dir = (
-                    str(pathlib.Path(__file__).parent.absolute()) + "/transcripts/"
+            text_content = ""
+            file_name = (
+                input_file.name
+                + "-"
+                + whisper_model
+                + "-"
+                + datetime.today().strftime("%d-%m-%y")
+                + ".docx"
+            )
+
+            for segment in segments:
+                speaker = segment["speaker"]
+                text = segment["text"]
+                color = speaker_colors.get(speaker, "000000")  # Cor padrão é preto
+
+                # Exibe o texto colorido
+                st.markdown(
+                    f"<span><strong style='color: #{color};'>{speaker}:</strong> {text}</span>",
+                    unsafe_allow_html=True,
                 )
 
-                if not os.path.exists(save_dir):
-                    os.makedirs(save_dir)
+                text_content += f"{speaker}: {text}\n"
 
-                text_content = ""
-                html_text = ""
+            existing_transcription = fetch_transcription_by_file_name(file_name)
 
-                # Cores de confiança - do vermelho ao verde
-                colors = [(0.6, 0, 0), (1, 0.7, 0), (0, 0.6, 0)]
-                cmap = mcolors.LinearSegmentedColormap.from_list("my_colormap", colors)
+            if existing_transcription is None:
+                save_transcription_to_db(file_name, text_content, whisper_model)
 
-                # Coloração das palavras com base na confiança
-                for idx, segment in enumerate(output["segments"]):
-                    for w in segment["words"]:
-                        rgba_color = cmap(w["probability"])
-                        rgb_color = tuple(round(x * 255) for x in rgba_color[:3])
-                        html_text += (
-                            f"<span style='color:rgb{rgb_color}'>{w['word']}</span> "
-                        )
+            # Cria um arquivo docx na memória
+            doc = docx.Document()
 
-                        text_content += w["word"]
+            # Adiciona os segmentos ao documento com cores
+            for segment in segments:
+                speaker = segment["speaker"]
+                text = segment["text"]
+                color = speaker_colors.get(speaker, "000000")  # Cor padrão é preto
 
-                        # Quebra de linha após pontuação
-                        if any(c in w["word"] for c in "!?.") and not any(
-                            c.isdigit() for c in w["word"]
-                        ):
-                            html_text += "<br><br>"
-                            text_content += "\n\n"
-
-                with st.container():
-                    st.markdown(f"#### Transcrição de {input_file.name}:")
-                    st.markdown(html_text, unsafe_allow_html=True)
-
-                doc.add_paragraph(text_content)
-
-                # Salva o arquivo transcrito em um docx
-                file_name = (
-                    input_file.name
-                    + "-"
-                    + whisper_model
-                    + "-"
-                    + datetime.today().strftime("%d-%m-%y")
-                    + ".docx"
+                # Adiciona um parágrafo com a cor do texto
+                paragraph = doc.add_paragraph()
+                # Adiciona o nome do falante em cor
+                speaker_run = paragraph.add_run(f"{speaker}: ")
+                speaker_run.font.color.rgb = docx.shared.RGBColor(
+                    int(color[:2], 16), int(color[2:4], 16), int(color[4:], 16)
                 )
 
-                # print(file_name)
-                doc.save(save_dir + file_name)
+                # Adiciona o texto do falante em preto
+                text_run = paragraph.add_run(text)
+                text_run.font.color.rgb = docx.shared.RGBColor(0, 0, 0)  # Preto
+                
+            bio = io.BytesIO()
+            doc.save(bio)
+            bio.seek(0)
 
-                existing_transcription = fetch_transcription_by_file_name(file_name)
-
-                if existing_transcription is None:
-                    save_transcription_to_db(file_name, text_content, whisper_model)
-
-                bio = io.BytesIO()
-                doc.save(bio)
-
-                # Botão para baixar o arquivo transcrito
-                st.download_button(
-                    label="Baixar Transcrição",
-                    data=bio.getvalue(),
-                    file_name=file_name,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
+            # Botão para baixar o arquivo transcrito
+            st.download_button(
+                label="Baixar Transcrição",
+                data=bio.getvalue(),
+                file_name=file_name,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
         else:
             st.error("Por favor, selecione um arquivo.")
 
