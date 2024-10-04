@@ -27,9 +27,9 @@ def download_transcription(file_name, transcription_text, index):
 
 
 # Realiza o SELECT no banco de dados para obter todas as transcrições
-def fetch_transcriptions():
+def fetch_transcriptions(limit=10, offset=0):
 
-    query = "SELECT id, file_name, transcription, model FROM transcriptions ORDER BY created_at DESC;"
+    query = f"SELECT id, file_name, transcription, model FROM transcriptions ORDER BY created_at DESC LIMIT {limit} OFFSET {offset};"
     df = conn.query(query, ttl="10m")
     return df
 
@@ -58,8 +58,17 @@ def display_transcriptions():
         "As transcrições são salvas no padrão ``nome_do_audio.mp4-modelo-data_de_upload.docx``. Ao realizar a busca, lembre-se que há separação por hífen."
     )
 
+    # Número de transcrições por página
+    items_per_page = 10
+
+    # Inicializa o estado da página se não existir
+    if "page" not in st.session_state:
+        st.session_state.page = 0
+
     # Busca as transcrições no banco de dados
-    transcriptions_df = fetch_transcriptions()
+    transcriptions_df = fetch_transcriptions(
+        limit=items_per_page, offset=st.session_state.page * items_per_page
+    )
 
     if not transcriptions_df.empty:
         search_term = st.text_input("Buscar por nome de arquivo ou data")
@@ -101,8 +110,24 @@ def display_transcriptions():
                 # cols[2].markdown(f"{confidence_score:.2f}")
         else:
             st.warning("Nenhuma transcrição encontrada.")
+
     else:
         st.warning("Nenhuma transcrição disponível.")
+
+    # Botões de navegação
+    col1, col2 = st.columns([3,2])
+
+    with col1:
+        if st.session_state.page > 0:
+            if st.button("Página Anterior"):
+                st.session_state.page -= 1  # Volta uma página
+                st.rerun()  # Garante a atualização da página
+
+    with col2:
+        if len(transcriptions_df) == items_per_page:
+            if st.button("Próxima Página"):
+                st.session_state.page += 1  # Avança uma página
+                st.rerun()  # Garante a atualização da página
 
 
 # Função principal do Streamlit
