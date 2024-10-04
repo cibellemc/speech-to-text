@@ -1,14 +1,19 @@
 <h1 align="center"> Dashboard para transcrição de áudio </h1>
 
-<p align="center">
-Projeto base: https://github.com/jojojaeger/whisper-streamlit
-</p>
-<br>
-
 <!-- pasta para o git conseguir acessar a foto -->
 <p align="center">
   <img alt="Imagem da tela base do dashboard de transcrição de áudios" src=".github/dashboard-transcricao-historico.png" width="100%">
 </p>
+
+<br>
+<p align="center">
+Projetos base: 
+  <ul>
+    <li>https://github.com/jojojaeger/whisper-streamlit</li>
+    <li>https://medium.com/@xriteshsharmax/speaker-diarization-using-whisper-asr-and-pyannote-f0141c85d59a</li>
+  </ul>
+</p>
+<br>
 
 ## 🚀 Tecnologias
 - Streamlit: para a criação do web app.
