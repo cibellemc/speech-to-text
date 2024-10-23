@@ -1,10 +1,8 @@
 import time
 import streamlit as st
-import os
 import docx
 from sqlalchemy import text
 from datetime import datetime
-import pathlib
 import io
 import matplotlib.colors as mcolors
 from pages.select import display_transcriptions, fetch_transcription_by_file_name
@@ -60,17 +58,50 @@ def _style_language_uploader():
     st.markdown(hide_label, unsafe_allow_html=True)
 
 
-def save_transcription_to_db(file_name, transcription_text, model):
+def group_speaker_segments(segments):
+    grouped_transcription = []
+    current_speaker = None
+    current_text = ""
+
+    for segment in segments:
+        speaker = segment["speaker"]
+        text = segment["text"]
+
+        # Se o falante atual é o mesmo que o anterior, adiciona o texto ao bloco atual
+        if speaker == current_speaker:
+            current_text += " " + text
+        else:
+            # Se o falante é diferente, salva o bloco anterior (se existir) e inicia um novo
+            if current_speaker is not None:
+                grouped_transcription.append(
+                    {"speaker": current_speaker, "text": current_text.strip()}
+                )
+
+            # Atualiza o falante e o texto atual
+            current_speaker = speaker
+            current_text = text
+
+    # Adiciona o último bloco de texto, se existir
+    if current_speaker is not None:
+        grouped_transcription.append(
+            {"speaker": current_speaker, "text": current_text.strip()}
+        )
+
+    return grouped_transcription
+
+
+def save_transcription_to_db(file_name, transcription_text, model, execution_time):
     # Executa a query com os dados passados
     with conn.session as session:
         session.execute(
             text(
-                "INSERT INTO transcriptions (file_name, transcription, model) VALUES(:file_name, :transcription, :model);"
+                "INSERT INTO transcriptions (file_name, transcription, model, execution_time) VALUES(:file_name, :transcription, :model, :execution_time);"
             ),
             {
                 "file_name": file_name,
                 "transcription": transcription_text,
                 "model": model,
+                "execution_time": execution_time,
             },
         )
         session.commit()  # Confirma a transação
@@ -125,11 +156,20 @@ def upload_view():
     if btn_transcribe:
         # Se o usuário clicar em "Iniciar" e houver arquivos carregados, a transcrição será inicializada
         if input_file:
+            start_time = time.time()
+
             # print(input_file.name)
             with st.spinner("Transcrevendo o áudio..."):
                 segments = transcribe(input_file, whisper_model, num_speakers)
 
+            end_time = time.time()
+            execution_time = end_time - start_time
+            # print(execution_time)
+
             st.success("Transcrição finalizada!")
+            st.write(f"Tempo de execução: {execution_time:.2f} segundos")
+
+            grouped_segments = group_speaker_segments(segments)
 
             st.markdown("### Transcrição:")
 
@@ -143,7 +183,7 @@ def upload_view():
                 + ".docx"
             )
 
-            for segment in segments:
+            for segment in grouped_segments:
                 speaker = segment["speaker"]
                 text = segment["text"]
                 color = speaker_colors.get(speaker, "000000")  # Cor padrão é preto
@@ -159,7 +199,9 @@ def upload_view():
             existing_transcription = fetch_transcription_by_file_name(file_name)
 
             if existing_transcription is None:
-                save_transcription_to_db(file_name, text_content, whisper_model)
+                save_transcription_to_db(
+                    file_name, text_content, whisper_model, execution_time
+                )
 
             # Cria um arquivo docx na memória
             doc = docx.Document()
@@ -172,6 +214,7 @@ def upload_view():
 
                 # Adiciona um parágrafo com a cor do texto
                 paragraph = doc.add_paragraph()
+
                 # Adiciona o nome do falante em cor
                 speaker_run = paragraph.add_run(f"{speaker}: ")
                 speaker_run.font.color.rgb = docx.shared.RGBColor(
@@ -181,7 +224,7 @@ def upload_view():
                 # Adiciona o texto do falante em preto
                 text_run = paragraph.add_run(text)
                 text_run.font.color.rgb = docx.shared.RGBColor(0, 0, 0)  # Preto
-                
+
             bio = io.BytesIO()
             doc.save(bio)
             bio.seek(0)
