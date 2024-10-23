@@ -51,7 +51,8 @@ CREATE TABLE transcriptions (
     file_name VARCHAR(255),
     transcription TEXT,
     model VARCHAR(10),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    execution_time float
 );
 ```
 
