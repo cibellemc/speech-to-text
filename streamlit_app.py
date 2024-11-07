@@ -8,7 +8,20 @@ import matplotlib.colors as mcolors
 from pages.select import display_transcriptions, fetch_transcription_by_file_name
 from services.database import conn
 from transcriber import transcribe
+from pydub import AudioSegment
 
+def convert_to_mono(audio_file):
+    sound = AudioSegment.from_file(audio_file)
+    if sound.channels > 1:
+        sound = sound.set_channels(1)
+    
+    # Salvar o áudio convertido para mono em um buffer BytesIO
+    mono_audio_buffer = io.BytesIO()
+    sound.export(mono_audio_buffer, format="wav")
+    mono_audio_buffer.seek(0)  # Resetar o ponteiro do buffer para o início
+    mono_audio_buffer.name = audio_file.name  # Mantém o nome original do arquivo
+
+    return mono_audio_buffer
 
 def _style_language_uploader():
     languages = {
@@ -156,6 +169,8 @@ def upload_view():
     if btn_transcribe:
         # Se o usuário clicar em "Iniciar" e houver arquivos carregados, a transcrição será inicializada
         if input_file:
+
+            input_file = convert_to_mono(input_file)
             start_time = time.time()
 
             # print(input_file.name)

@@ -1,0 +1,27 @@
+# version: "3.8"
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: "transcritor"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "12345678"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+      
+volumes:
+  postgres_data:

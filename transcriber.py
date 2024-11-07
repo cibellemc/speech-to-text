@@ -32,7 +32,7 @@ def transcribe(input_file, whisper_model, num_speakers):
 
     # Carrega o modelo Whisper
     model = whisper.load_model(whisper_model)
-    result = model.transcribe(temp_audio_path)
+    result = model.transcribe(temp_audio_path, language="pt")
     segments = result["segments"]
 
     # Obtém a duração do áudio
