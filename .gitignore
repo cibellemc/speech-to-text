@@ -1,0 +1,5 @@
+*env
+__pycache__/
+temp_audio_files
+.streamlit
+*.wav

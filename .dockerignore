@@ -1,1 +1,8 @@
-.env
+*env
+__pycache__/
+temp_audio_files
+.streamlit
+*.wav
+.gitignore
+docker-compose.*
+entrypoint.sh

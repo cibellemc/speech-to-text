@@ -2,5 +2,7 @@ streamlit
 python-docx
 sqlalchemy
 psycopg2-binary
+pyannote.audio
 matplotlib
 openai-whisper
+pydub

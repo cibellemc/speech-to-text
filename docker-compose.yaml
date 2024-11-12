@@ -13,15 +13,12 @@ services:
       - "5432:5432"
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: cibellemc/speech-to-text:1.0
     depends_on:
       - postgres
     ports:
       - "8501:8501"
     volumes:
-      - .:/app
-      
+      - .streamlit/:/app/.streamlit  # Montar a pasta .streamlit  
 volumes:
   postgres_data:

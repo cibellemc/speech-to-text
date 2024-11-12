@@ -1,20 +1,26 @@
-# Base image
-FROM python:3.12
+FROM python:3.12-slim
 
-# Instalação do FFmpeg
-RUN apt-get update && apt-get install -y ffmpeg
+# Instalação do FFmpeg, biblio de sistema, auxiliares para tratamento de áudio
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ffmpeg \
+    build-essential \
+    libsndfile1 \
+    portaudio19-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Atualizar pip
+RUN pip install --upgrade pip
 
 # Configurações de diretório
 WORKDIR /app
 
-# Copia os arquivos necessários
+# Instalação de dependências
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
 
-# Instalação de dependências
-RUN pip install -r requirements.txt
-
-# Instalação do pyannote-audio diretamente do repositório GitHub
-RUN pip install -q git+https://github.com/pyannote/pyannote-audio
-
-# Comando de inicialização
+# Iniciar o servidor
 CMD ["streamlit", "run", "streamlit_app.py"]
