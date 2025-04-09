@@ -9,11 +9,15 @@
 - https://github.com/jojojaeger/whisper-streamlit
 - https://medium.com/@xriteshsharmax/speaker-diarization-using-whisper-asr-and-pyannote-f0141c85d59a
 
+  
 ## 🚀 Tecnologias
 - Streamlit: framework open source usado para transformar scripts Pyhton em aplicações web. 
 - [Whisper - OpenAI](https://github.com/openai/whisper): modelo de reconhecimento automático de fala desenvolvido pela OpenAI. Processa áudio e gera saída de texto. 
 - [AgglomerativeClustering](https://scikit-learn.org/dev/modules/generated/sklearn.cluster.AgglomerativeClustering.html): algoritmo de aprendizado não supervisionado, utilizado aqui para a identificação e separação de diferentes vozes em um áudio. 
 
+## ▶️ Fluxograma de funcionamento do sistema
+- [Desenho do algoritmo](https://www.mermaidchart.com/raw/e361f51c-36c1-4215-ae15-dea2c0fba48a?theme=light&version=v0.1&format=svg)
+  
 # Configurações do ambiente de desenvolvimento
 1. Clone o projeto.
 ```
