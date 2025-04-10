@@ -2,6 +2,7 @@
 
 services:
   postgres:
+    container_name: db-transcritor
     image: postgres:13
     environment:
       POSTGRES_DB: "transcritor"
@@ -9,16 +10,17 @@ services:
       POSTGRES_PASSWORD: "12345678"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Executa automaticamente
     ports:
       - "5432:5432"
 
   app:
-    image: cibellemc/speech-to-text:1.0
+    image: speech-to-text:1.0
+    container_name: app-transcritor
+    # build: .
     depends_on:
       - postgres
     ports:
-      - "8501:8501"
-    volumes:
-      - .streamlit/:/app/.streamlit  # Montar a pasta .streamlit  
+      - "8501:8501" 
 volumes:
   postgres_data:

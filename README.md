@@ -21,99 +21,33 @@
 # Configurações do ambiente de desenvolvimento
 1. Clone o projeto.
 ```
-git clone https://github.com/cibellemc/speech-to-text.git
+git clone git@github.com:cibellemc/speech-to-text.git
 ```
 
-2. Entre na pasta com o comando `cd/speech-to/text`.
-
-3. Crie a pasta oculta `.streamlit/` na raiz do projeto. 
-
-4. Crie o arquivo `secrets.toml` dentro da pasta `.streamlit/` e cole o conteúdo abaixo. 
+2. Entre na pasta do projeto
 ```
-[connections.postgresql]
-dialect = "postgresql"
-host = "localhost"
-port = "5432"
-database = "POSTGRES_DB" 
-username = "POSTGRES_USER" 
-password = "POSTGRES_PASSWORD" 
+cd/speech-to-text
 ```
 
-Esse passo é necessário para a conexão, pois armazena as variáveis sensíveis relacionadas ao banco. 
-
-A estrutura das pastas ficará semelhante ao descrito abaixo:
+3. Faça o build da imagem (Dockerfile)
 ```
-├── .streamlit/ 
-|  ├── secrets.toml 
-├── pages/
-├── services/
-├── docker-compose.yaml
+sudo docker build -t speech-to-text:1.0 .
 ```
 
-5. Altere as configurações do banco no arquivo `docker-compose.yaml`.
+4. Suba os containers (docker-compose.yaml)
 ```
-environment:
-  POSTGRES_DB: "transcritor" # preencher nome do banco
-  POSTGRES_USER: "postgres" # preencher usuário
-  POSTGRES_PASSWORD: "12345678" # preencher senha
+sudo docker-compose up -d
 ```
 
-6. Com base nas variáveis acima, modifique também o `.streamlit/secrets.toml`. 
-```
-[connections.postgresql]
-dialect = "postgresql"
-host = "postgres"
-port = "5432"
-database = "POSTGRES_DB"
-username = "POSTGRES_USER"
-password = "POSTGRES_PASSWORD"
-```
+Caso queira mudar configurações de portas, nome de banco de dados ou senha, ou nome dos containers, edite os arquivos `.streamlit/secrets.toml` e `docker-compose.yaml`.
 
-7. Rode o comando 
-```
-sudo docker-compose up
-```
-
-8. Abra um novo terminal, rode o comando abaixo para ver todos os containers
-```
-sudo docker ps -a
-```
-
-Identifique o que se tratar do banco postgres e copie o ID
-
-9. Rode o comando abaixo para executar um terminal dentro do container.
-```
-docker exec -it <ID do container do postgres> psql -U <POSTGRES_USER> -d <POSTGRES_DB>
-```
-Exemplo: `docker exec -it 35baccfc7ce9 psql -U postgres -d transcritor`
-
-10. Crie a tabela no banco de dados
-```
-CREATE TABLE transcriptions (
-    id SERIAL PRIMARY KEY,
-    file_name VARCHAR(255),
-    transcription TEXT,
-    model VARCHAR(10),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    execution_time float
-);
-```
 ## 🌐 Acesso à aplicação
-No terminal em que você subiu o docker-compose aparecerão os links de acesso.
+No terminal em que você subiu o docker-compose aparecerá o link de acesso
 ```
 # exemplo 
 teste-docker-app-1       |   You can now view your Streamlit app in your browser.
 teste-docker-app-1       | 
-teste-docker-app-1       |   Local URL: http://localhost:8501
-teste-docker-app-1       |   Network URL: http://172.19.0.3:8501
-teste-docker-app-1       |   External URL: http://177.107.30.98:8501
+teste-docker-app-1       |   Local URL: http://0.0.0.0:8501
 ```
 
-## Caso queira fazer alguma alteração no front
-Adicione a linha 3 do código abaixo no `docker-compose.yaml` para substituir o conteúdo do app pelas suas modificações.
-```
-    volumes:
-      - .:/app # nova config
-      - .streamlit/:/app/.streamlit  # já existente
-
-```
+Você pode acessar localmente (127.0.0.1:8501), dentro da rede ou externamente (consultar seus ips e manter a porta 8501)
