@@ -2,7 +2,7 @@
 
 services:
   postgres:
-    container_name: db-transcritor
+    container_name: cuda-db-transcritor
     image: postgres:13
     environment:
       POSTGRES_DB: "transcritor"
@@ -15,11 +15,19 @@ services:
       - "5432:5432"
 
   app:
-    image: speech-to-text:1.0
+    image: cibellemc/speech-to-text:2.0
     container_name: app-transcritor
     # build: .
     depends_on:
       - postgres
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
     ports:
       - "8501:8501" 
 volumes:

@@ -29,12 +29,7 @@ git clone git@github.com:cibellemc/speech-to-text.git
 cd/speech-to-text
 ```
 
-3. Faça o build da imagem (Dockerfile)
-```
-sudo docker build -t speech-to-text:1.0 .
-```
-
-4. Suba os containers (docker-compose.yaml)
+3. Suba os containers (docker-compose.yaml)
 ```
 sudo docker-compose up -d
 ```

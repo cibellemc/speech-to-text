@@ -1,6 +1,7 @@
 import whisper
 import os
 import subprocess
+import torch
 
 from pyannote.audio.pipelines.speaker_verification import PretrainedSpeakerEmbedding
 
@@ -14,6 +15,8 @@ from sklearn.cluster import AgglomerativeClustering
 import numpy as np
 
 def transcribe(input_file, whisper_model, num_speakers):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
     # Cria um diretório temporário
     temp_dir = "temp_audio_files"
     os.makedirs(temp_dir, exist_ok=True)
@@ -31,7 +34,7 @@ def transcribe(input_file, whisper_model, num_speakers):
         temp_audio_path = "audio.wav"
 
     # Carrega o modelo Whisper
-    model = whisper.load_model(whisper_model)
+    model = whisper.load_model(whisper_model, device=device)
     result = model.transcribe(temp_audio_path, language="pt")
     segments = result["segments"]
 
@@ -43,7 +46,7 @@ def transcribe(input_file, whisper_model, num_speakers):
 
     audio = Audio()
     embedding_model = PretrainedSpeakerEmbedding(
-        "speechbrain/spkrec-ecapa-voxceleb", device="cpu"
+        "speechbrain/spkrec-ecapa-voxceleb", device=device
     )
 
     def segment_embedding(segment):
