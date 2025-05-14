@@ -14,13 +14,26 @@ services:
     ports:
       - "5432:5432"
 
-  app:
-    image: speech-to-text:1.0
-    container_name: app-transcritor
-    # build: .
-    depends_on:
-      - postgres
-    ports:
-      - "8501:8501" 
+  # ollama:
+  #   container_name: ollama-server
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+
+  # app:
+  #   image: speech-to-text:1.1
+  #   container_name: app-transcritor
+  #   build: .
+  #   depends_on:
+  #     - postgres
+  #     - ollama
+  #   ports:
+  #     - "8501:8501" 
+  #   environment:
+  #     - OLLAMA_HOST=http://ollama:11434
+
 volumes:
   postgres_data:
+  ollama_data:

@@ -25,47 +25,47 @@ def transcribe(input_file, whisper_model, num_speakers):
     with open(temp_audio_path, "wb") as f:
         f.write(input_file.getbuffer())
 
-    # Converte o arquivo para WAV se necessário
-    if temp_audio_path[-3:] != "wav":
+    # Converte para WAV se necessário
+    if not temp_audio_path.lower().endswith('.wav'):
         subprocess.call(["ffmpeg", "-i", temp_audio_path, "audio.wav", "-y"])
         temp_audio_path = "audio.wav"
 
-    # Carrega o modelo Whisper
+    # Transcreve com Whisper
     model = whisper.load_model(whisper_model)
     result = model.transcribe(temp_audio_path, language="pt")
     segments = result["segments"]
 
-    # Obtém a duração do áudio
+    # Se for apenas 1 falante, retorna imediatamente com SPEAKER 1
+    if num_speakers == 1:
+        for segment in segments:
+            segment["speaker"] = "SPEAKER 1"
+        return segments
+
+    # Processo de diarização (apenas para num_speakers > 1)
     with contextlib.closing(wave.open(temp_audio_path, "r")) as f:
-        frames = f.getnframes()
-        rate = f.getframerate()
-        duration = frames / float(rate)
+        duration = f.getnframes() / float(f.getframerate())
 
     audio = Audio()
     embedding_model = PretrainedSpeakerEmbedding(
-        "speechbrain/spkrec-ecapa-voxceleb", device="cpu"
+        "speechbrain/spkrec-ecapa-voxceleb", 
+        device="cpu"
     )
 
     def segment_embedding(segment):
         start = segment["start"]
-        end = min(duration, segment["end"])  # Ajusta o fim do segmento
+        end = min(duration, segment["end"])
         clip = Segment(start, end)
-        waveform, sample_rate = audio.crop(temp_audio_path, clip)
+        waveform, _ = audio.crop(temp_audio_path, clip)
         return embedding_model(waveform[None])
 
-    # Cria embeddings para cada segmento
     embeddings = np.zeros(shape=(len(segments), 192))
     for i, segment in enumerate(segments):
         embeddings[i] = segment_embedding(segment)
 
     embeddings = np.nan_to_num(embeddings)
-
-    # Clustering para identificação de falantes
     clustering = AgglomerativeClustering(num_speakers).fit(embeddings)
-    labels = clustering.labels_
     
-    # Adiciona a informação do falante em cada segmento
-    for i in range(len(segments)):
-        segments[i]["speaker"] = "SPEAKER " + str(labels[i] + 1)
+    for i, label in enumerate(clustering.labels_):
+        segments[i]["speaker"] = f"SPEAKER {label + 1}"
 
-    return segments  # Retorna os segmentos com transcrição e falantes
+    return segments

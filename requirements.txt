@@ -6,3 +6,4 @@ pyannote.audio
 matplotlib
 openai-whisper
 pydub
+requests

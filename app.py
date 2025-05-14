@@ -1,14 +1,41 @@
 import time
+from auth import authenticated_only
 import streamlit as st
 import docx
 from sqlalchemy import text
 from datetime import datetime
 import io
 import matplotlib.colors as mcolors
+import requests
+import os
 from pages.select import display_transcriptions, fetch_transcription_by_file_name
+from pages.login import login
 from services.database import conn
 from transcriber import transcribe
 from pydub import AudioSegment
+
+
+def check_existing_transcription(file_name, whisper_model):
+    """Verifica se já existe uma transcrição idêntica no banco de dados"""
+    base_name = os.path.splitext(file_name)[0]  # Remove a extensão
+    date_suffix = datetime.today().strftime("%d-%m-%y")
+    
+    # Padrão de nome esperado: NOMEORIGINAL-modelo-DATA.docx
+    expected_pattern = f"{base_name}-{whisper_model}-{date_suffix}%"
+    
+    with conn.session as session:
+        result = session.execute(
+            text("""
+                SELECT file_name, transcription, execution_time 
+                FROM transcriptions 
+                WHERE file_name LIKE :pattern
+                ORDER BY created_at DESC
+                LIMIT 1
+            """),
+            {"pattern": expected_pattern}
+        )
+        return result.fetchone()
+    
 
 def convert_to_mono(audio_file):
     sound = AudioSegment.from_file(audio_file)
@@ -103,23 +130,53 @@ def group_speaker_segments(segments):
     return grouped_transcription
 
 
-def save_transcription_to_db(file_name, transcription_text, model, execution_time):
-    # Executa a query com os dados passados
+def save_transcription_to_db(user_id, file_name, transcription_text, model, execution_time):
     with conn.session as session:
         session.execute(
-            text(
-                "INSERT INTO transcriptions (file_name, transcription, model, execution_time) VALUES(:file_name, :transcription, :model, :execution_time);"
-            ),
+            text("""
+                INSERT INTO transcriptions 
+                (user_id, file_name, transcription, model, execution_time) 
+                VALUES(:user_id, :file_name, :transcription, :model, :execution_time)
+            """),
             {
+                "user_id": user_id,
                 "file_name": file_name,
                 "transcription": transcription_text,
                 "model": model,
                 "execution_time": execution_time,
             },
         )
-        session.commit()  # Confirma a transação
+        session.commit()
+
+# def generate_summary(text_content):
+#     try:
+#         ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+#         response = requests.post(f'{ollama_host}/api/generate', 
+#             json={
+#                 "model": "llama2",
+#                 "prompt": f"Faça um resumo conciso do seguinte texto em português brasileiro: {text_content}. Pense como um advogado redigindo uma ata.",
+#                 "stream": False
+#             })
+        
+#         if response.status_code == 200:
+#             return response.json()['response']
+#         else:
+#             return "Erro ao gerar resumo. Verifique se o servidor Ollama está rodando."
+#     except Exception as e:
+#         return f"Erro ao conectar com o Ollama: {str(e)}"
 
 
+# def authenticated_only(func):
+#     def wrapper(*args, **kwargs):
+#         if not st.session_state.get('authenticated'):
+#             st.warning("Por favor, faça login para acessar esta página")
+#             login()
+#             st.stop()
+#         return func(*args, **kwargs)
+#     return wrapper
+
+# Use o decorator nas suas views:
+@authenticated_only
 def upload_view():
     st.title("Realize uma nova Transcrição")
 
@@ -211,10 +268,16 @@ def upload_view():
 
                 text_content += f"{speaker}: {text}\n"
 
-            existing_transcription = fetch_transcription_by_file_name(file_name)
+            # with st.spinner("Gerando resumo automático..."):
+            #     summary = generate_summary(text_content)
+            #     st.markdown("### Resumo Automático:")
+            #     st.write(summary)
+            user_id = st.session_state.get("user_id")  # Assumindo que isso é salvo após o login
+
+            existing_transcription = fetch_transcription_by_file_name( user_id, file_name)
 
             if existing_transcription is None:
-                save_transcription_to_db(
+                save_transcription_to_db(user_id,
                     file_name, text_content, whisper_model, execution_time
                 )
 
@@ -256,32 +319,54 @@ def upload_view():
 
 
 def main():
+    user_id = login()
 
-    _style_language_uploader()
 
-    st.sidebar.subheader("Navegação no sistema")
+    if st.session_state.get('authenticated'):
+        _style_language_uploader()
+        usuario_logado = st.session_state.get("user_id")
+        print(f"DEBUG: Usuário logado = {usuario_logado}")  # Log no terminal
 
-    st.sidebar.markdown(
-        "Clique em `Nova transcrição` para realizar transcrição de um novo arquivo. Caso deseje consultar transcrições já realizadas, clique em `Histórico`."
-    )
+        if st.sidebar.button("Logout"):
+            usuario_logado = st.session_state.get("user_id")
+            print(f"DEBUG: Usuário deslogando")  # Log no terminal
+            # st.logout()
+            st.session_state.clear()
+            st.rerun()
 
-    st.sidebar.subheader("Download de transcrições")
-    st.sidebar.markdown(
-        "Clique em ``Baixar Transcrição`` para obter o arquivo em .docx."
-    )
+        # Tudo relacionado à sidebar só aparece se estiver autenticado
+        st.sidebar.subheader("Navegação no sistema")
+        st.sidebar.markdown(
+            "Clique em `Nova transcrição` para realizar transcrição de um novo arquivo. "
+            "Caso deseje consultar transcrições já realizadas, clique em `Histórico`."
+        )
+        st.sidebar.subheader("Download de transcrições")
+        st.sidebar.markdown("Clique em ``Baixar Transcrição`` para obter o arquivo em .docx.")
 
-    pg = st.navigation(
-        [
+        pages = [
             st.Page(
                 upload_view,
                 title="Nova transcrição",
                 icon=":material/insert_drive_file:",
             ),
             st.Page(
-                display_transcriptions, title="Histórico", icon=":material/history:"
+                lambda: display_transcriptions(user_id),
+                title="Histórico", 
+                icon=":material/history:"
             ),
         ]
-    )
+    else:
+
+        st.sidebar.empty()
+        pages = [
+            st.Page(
+                login,
+                title="Login",
+                icon=":material/login:",
+            )
+        ]
+
+    pg = st.navigation(pages)
     pg.run()
 
 
