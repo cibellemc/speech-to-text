@@ -69,7 +69,7 @@ def verify_user(username, password):
                     return user_id
         return None
     except Exception as e:
-        st.error(f"Erro ao verificar usuário: {str(e)}")
+        # st.error(f"Erro ao verificar usuário: {str(e)}")
         return None
 
 def login_page():

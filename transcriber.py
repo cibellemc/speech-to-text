@@ -1,71 +1,81 @@
 import whisper
-import os
 import subprocess
-
-from pyannote.audio.pipelines.speaker_verification import PretrainedSpeakerEmbedding
-
-from pyannote.audio import Audio
+import tempfile
+from pyannote.audio import Pipeline
 from pyannote.core import Segment
 
-import wave
-import contextlib
+def convert_to_wav(input_file):
+    """Converte qualquer arquivo (áudio ou vídeo) para WAV 16kHz mono."""
+    # Cria arquivo temporário de entrada
+    temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=".input")
+    temp_input.write(input_file.getbuffer())
+    temp_input.flush()
+    temp_input.close()
 
-from sklearn.cluster import AgglomerativeClustering
-import numpy as np
+    # Cria arquivo temporário de saída WAV
+    temp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    temp_wav.close()
 
-def transcribe(input_file, whisper_model, num_speakers):
-    # Cria um diretório temporário
-    temp_dir = "temp_audio_files"
-    os.makedirs(temp_dir, exist_ok=True)
+    # Usa ffmpeg para extrair e converter o áudio
+    subprocess.call([
+        "ffmpeg", "-i", temp_input.name,
+        "-ar", "16000",  # taxa de amostragem 16kHz
+        "-ac", "1",      # mono
+        temp_wav.name,
+        "-y"
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    # Salva o arquivo carregado
-    temp_audio_path = os.path.join(temp_dir, input_file.name)
+    return temp_wav.name
 
-    # Salva o arquivo no diretório temporário
-    with open(temp_audio_path, "wb") as f:
-        f.write(input_file.getbuffer())
 
-    # Converte para WAV se necessário
-    if not temp_audio_path.lower().endswith('.wav'):
-        subprocess.call(["ffmpeg", "-i", temp_audio_path, "audio.wav", "-y"])
-        temp_audio_path = "audio.wav"
+def transcribe(input_file, whisper_model):
+    # Converte para WAV (aceita vídeo e áudio)
+    # audio_path = convert_to_wav(input_file)
 
     # Transcreve com Whisper
     model = whisper.load_model(whisper_model)
-    result = model.transcribe(temp_audio_path, language="pt")
+    result = model.transcribe(input_file, language="pt")
     segments = result["segments"]
 
-    # Se for apenas 1 falante, retorna imediatamente com SPEAKER 1
-    if num_speakers == 1:
-        for segment in segments:
-            segment["speaker"] = "SPEAKER 1"
-        return segments
+    # === 2. Diariza com pyannote ===
+    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token="hf...")
+    diarization_result = pipeline(input_file)
 
-    # Processo de diarização (apenas para num_speakers > 1)
-    with contextlib.closing(wave.open(temp_audio_path, "r")) as f:
-        duration = f.getnframes() / float(f.getframerate())
-
-    audio = Audio()
-    embedding_model = PretrainedSpeakerEmbedding(
-        "speechbrain/spkrec-ecapa-voxceleb", 
-        device="cpu"
-    )
-
-    def segment_embedding(segment):
+    # Atribui falante a cada trecho
+    for segment in segments:
         start = segment["start"]
-        end = min(duration, segment["end"])
-        clip = Segment(start, end)
-        waveform, _ = audio.crop(temp_audio_path, clip)
-        return embedding_model(waveform[None])
+        end = segment["end"]
+        segment_speaker = "UNKNOWN"
+        for turn, _, speaker in diarization_result.itertracks(yield_label=True):
+            if Segment(start, end).intersects(turn):
+                segment_speaker = f"SPEAKER {int(speaker.split('_')[-1]) + 1}" if speaker.startswith("SPEAKER_") else speaker
+                break
+        segment["speaker"] = segment_speaker
 
-    embeddings = np.zeros(shape=(len(segments), 192))
-    for i, segment in enumerate(segments):
-        embeddings[i] = segment_embedding(segment)
+    # === Agrupamento de falas consecutivas por falante ===
+    grouped_output = []
+    if segments:
+        current_speaker = segments[0]["speaker"]
+        current_text = segments[0]["text"].strip()
 
-    embeddings = np.nan_to_num(embeddings)
-    clustering = AgglomerativeClustering(num_speakers).fit(embeddings)
-    
-    for i, label in enumerate(clustering.labels_):
-        segments[i]["speaker"] = f"SPEAKER {label + 1}"
+        for seg in segments[1:]:
+            speaker = seg["speaker"]
+            text = seg["text"].strip()
 
-    return segments
+            if speaker == current_speaker:
+                current_text += " " + text
+            else:
+                grouped_output.append({
+                    "speaker": current_speaker,
+                    "text": current_text
+                })
+                current_speaker = speaker
+                current_text = text
+
+        # Último grupo
+        grouped_output.append({
+            "speaker": current_speaker,
+            "text": current_text
+        })
+
+    return grouped_output

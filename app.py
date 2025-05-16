@@ -5,15 +5,12 @@ import docx
 from sqlalchemy import text
 from datetime import datetime
 import io
-import matplotlib.colors as mcolors
 import requests
 import os
 from pages.select import display_transcriptions, fetch_transcription_by_file_name
 from pages.login import login
 from services.database import conn
-from transcriber import transcribe
-from pydub import AudioSegment
-
+from transcriber import convert_to_wav, transcribe
 
 def check_existing_transcription(file_name, whisper_model):
     """Verifica se já existe uma transcrição idêntica no banco de dados"""
@@ -37,25 +34,25 @@ def check_existing_transcription(file_name, whisper_model):
         return result.fetchone()
     
 
-def convert_to_mono(audio_file):
-    sound = AudioSegment.from_file(audio_file)
-    if sound.channels > 1:
-        sound = sound.set_channels(1)
+# def convert_to_mono(audio_file):
+#     sound = AudioSegment.from_file(audio_file)
+#     if sound.channels > 1:
+#         sound = sound.set_channels(1)
     
-    # Salvar o áudio convertido para mono em um buffer BytesIO
-    mono_audio_buffer = io.BytesIO()
-    sound.export(mono_audio_buffer, format="wav")
-    mono_audio_buffer.seek(0)  # Resetar o ponteiro do buffer para o início
-    mono_audio_buffer.name = audio_file.name  # Mantém o nome original do arquivo
+#     # Salvar o áudio convertido para mono em um buffer BytesIO
+#     mono_audio_buffer = io.BytesIO()
+#     sound.export(mono_audio_buffer, format="wav")
+#     mono_audio_buffer.seek(0)  # Resetar o ponteiro do buffer para o início
+#     mono_audio_buffer.name = audio_file.name  # Mantém o nome original do arquivo
 
-    return mono_audio_buffer
+#     return mono_audio_buffer
 
 def _style_language_uploader():
     languages = {
         "PT-BR": {
             "button": "Selecionar arquivos",
             "instructions": "Arraste e solte os arquivos aqui",
-            "limits": "Limite de 1GB por arquivo | MP4, M4A, MP3, WAV",
+            "limits": "Limite de 1GB por arquivo | MP4, M4A, MP3, MKV, WAV",
         },
     }
 
@@ -98,36 +95,36 @@ def _style_language_uploader():
     st.markdown(hide_label, unsafe_allow_html=True)
 
 
-def group_speaker_segments(segments):
-    grouped_transcription = []
-    current_speaker = None
-    current_text = ""
+# def group_speaker_segments(segments):
+#     grouped_transcription = []
+#     current_speaker = None
+#     current_text = ""
 
-    for segment in segments:
-        speaker = segment["speaker"]
-        text = segment["text"]
+#     for segment in segments:
+#         speaker = segment["speaker"]
+#         text = segment["text"]
 
-        # Se o falante atual é o mesmo que o anterior, adiciona o texto ao bloco atual
-        if speaker == current_speaker:
-            current_text += " " + text
-        else:
-            # Se o falante é diferente, salva o bloco anterior (se existir) e inicia um novo
-            if current_speaker is not None:
-                grouped_transcription.append(
-                    {"speaker": current_speaker, "text": current_text.strip()}
-                )
+#         # Se o falante atual é o mesmo que o anterior, adiciona o texto ao bloco atual
+#         if speaker == current_speaker:
+#             current_text += " " + text
+#         else:
+#             # Se o falante é diferente, salva o bloco anterior (se existir) e inicia um novo
+#             if current_speaker is not None:
+#                 grouped_transcription.append(
+#                     {"speaker": current_speaker, "text": current_text.strip()}
+#                 )
 
-            # Atualiza o falante e o texto atual
-            current_speaker = speaker
-            current_text = text
+#             # Atualiza o falante e o texto atual
+#             current_speaker = speaker
+#             current_text = text
 
-    # Adiciona o último bloco de texto, se existir
-    if current_speaker is not None:
-        grouped_transcription.append(
-            {"speaker": current_speaker, "text": current_text.strip()}
-        )
+#     # Adiciona o último bloco de texto, se existir
+#     if current_speaker is not None:
+#         grouped_transcription.append(
+#             {"speaker": current_speaker, "text": current_text.strip()}
+#         )
 
-    return grouped_transcription
+#     return grouped_transcription
 
 
 def save_transcription_to_db(user_id, file_name, transcription_text, model, execution_time):
@@ -154,7 +151,7 @@ def save_transcription_to_db(user_id, file_name, transcription_text, model, exec
 #         response = requests.post(f'{ollama_host}/api/generate', 
 #             json={
 #                 "model": "llama2",
-#                 "prompt": f"Faça um resumo conciso do seguinte texto em português brasileiro: {text_content}. Pense como um advogado redigindo uma ata.",
+#                 "prompt": f"Faça uma ata em português brasileiro a partir da seguinte transcrição: {text_content}. Pense como um advogado, seja direto e conciso.",
 #                 "stream": False
 #             })
         
@@ -165,15 +162,6 @@ def save_transcription_to_db(user_id, file_name, transcription_text, model, exec
 #     except Exception as e:
 #         return f"Erro ao conectar com o Ollama: {str(e)}"
 
-
-# def authenticated_only(func):
-#     def wrapper(*args, **kwargs):
-#         if not st.session_state.get('authenticated'):
-#             st.warning("Por favor, faça login para acessar esta página")
-#             login()
-#             st.stop()
-#         return func(*args, **kwargs)
-#     return wrapper
 
 # Use o decorator nas suas views:
 @authenticated_only
@@ -205,7 +193,7 @@ def upload_view():
     with st.form("input_form"):
         input_file = st.file_uploader(
             "Arquivos de áudio",
-            type=["mp4", "m4a", "mp3", "wav"],
+            type=["mp4", "m4a", "mp3", "mkv", "wav"],
             accept_multiple_files=False,
         )
 
@@ -213,39 +201,19 @@ def upload_view():
 
         whisper_model = st.selectbox(
             "Modelo de Transcriçao",
-            options=["tiny", "base", "small", "medium", "large"],
-            index=4,
+            options=["tiny", "base", "small", "medium", "large", "turbo"],
+            index=5,
         )
 
-        num_speakers = st.number_input(
-            "Quantidade de falantes", min_value=1, max_value=10
-        )
+        # num_speakers = st.number_input(
+        #     "Quantidade de falantes", min_value=1, max_value=10
+        # )
 
         btn_transcribe = st.form_submit_button(label="Iniciar")
 
     if btn_transcribe:
-        # Se o usuário clicar em "Iniciar" e houver arquivos carregados, a transcrição será inicializada
         if input_file:
-
-            input_file = convert_to_mono(input_file)
-            start_time = time.time()
-
-            # print(input_file.name)
-            with st.spinner("Transcrevendo o áudio..."):
-                segments = transcribe(input_file, whisper_model, num_speakers)
-
-            end_time = time.time()
-            execution_time = end_time - start_time
-            # print(execution_time)
-
-            st.success("Transcrição finalizada!")
-            st.write(f"Tempo de execução: {execution_time:.2f} segundos")
-
-            grouped_segments = group_speaker_segments(segments)
-
-            st.markdown("### Transcrição:")
-
-            text_content = ""
+            user_id = st.session_state.get("user_id")  # Assumindo que isso é salvo após o login
             file_name = (
                 input_file.name
                 + "-"
@@ -255,84 +223,100 @@ def upload_view():
                 + ".docx"
             )
 
-            for segment in grouped_segments:
-                speaker = segment["speaker"]
-                text = segment["text"]
-                color = speaker_colors.get(speaker, "000000")  # Cor padrão é preto
-
-                # Exibe o texto colorido
-                st.markdown(
-                    f"<span><strong style='color: #{color};'>{speaker}:</strong> {text}</span>",
-                    unsafe_allow_html=True,
-                )
-
-                text_content += f"{speaker}: {text}\n"
-
-            # with st.spinner("Gerando resumo automático..."):
-            #     summary = generate_summary(text_content)
-            #     st.markdown("### Resumo Automático:")
-            #     st.write(summary)
-            user_id = st.session_state.get("user_id")  # Assumindo que isso é salvo após o login
-
             existing_transcription = fetch_transcription_by_file_name( user_id, file_name)
 
             if existing_transcription is None:
+            # Se o usuário clicar em "Iniciar" e houver arquivos carregados, a transcrição será inicializada
+
+                input_file = convert_to_wav(input_file)
+                start_time = time.time()
+
+                # print(input_file.name)
+                with st.spinner("Transcrevendo o áudio..."):
+                    segments = transcribe(input_file, whisper_model)
+
+                end_time = time.time()
+                execution_time = end_time - start_time
+                # print(execution_time)
+
+                st.success("Transcrição finalizada!")
+                st.write(f"Tempo de execução: {execution_time:.2f} segundos")
+
+                # grouped_segments = group_speaker_segments(segments)
+
+                st.markdown("### Transcrição:")
+
+                text_content = ""
+
+                for segment in segments:
+                    speaker = segment["speaker"]
+                    text = segment["text"]
+                    color = speaker_colors.get(speaker, "000000")  # Cor padrão é preto
+
+                    # Exibe o texto colorido
+                    st.markdown(
+                        f"<span><strong style='color: #{color};'>{speaker}:</strong> {text}</span>",
+                        unsafe_allow_html=True,
+                    )
+
+                    text_content += f"{speaker}: {text}\n"
+
+                # with st.spinner("Gerando resumo automático..."):
+                #     summary = generate_summary(text_content)
+                #     st.markdown("### Resumo Automático:")
+                #     st.write(summary)
+
+                
                 save_transcription_to_db(user_id,
-                    file_name, text_content, whisper_model, execution_time
+                        file_name, text_content, whisper_model, execution_time
+                    )
+
+                # Cria um arquivo docx na memória
+                doc = docx.Document()
+
+                # Adiciona os segmentos ao documento com cores
+                for segment in segments:
+                    speaker = segment["speaker"]
+                    text = segment["text"]
+                    color = speaker_colors.get(speaker, "000000")  # Cor padrão é preto
+
+                    # Adiciona um parágrafo com a cor do texto
+                    paragraph = doc.add_paragraph()
+
+                    # Adiciona o nome do falante em cor
+                    speaker_run = paragraph.add_run(f"{speaker}: ")
+                    speaker_run.font.color.rgb = docx.shared.RGBColor(
+                        int(color[:2], 16), int(color[2:4], 16), int(color[4:], 16)
+                    )
+
+                    # Adiciona o texto do falante em preto
+                    text_run = paragraph.add_run(text)
+                    text_run.font.color.rgb = docx.shared.RGBColor(0, 0, 0)  # Preto
+
+                bio = io.BytesIO()
+                doc.save(bio)
+                bio.seek(0)
+
+                # Botão para baixar o arquivo transcrito
+                st.download_button(
+                    label="Baixar Transcrição",
+                    data=bio.getvalue(),
+                    file_name=file_name,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 )
-
-            # Cria um arquivo docx na memória
-            doc = docx.Document()
-
-            # Adiciona os segmentos ao documento com cores
-            for segment in segments:
-                speaker = segment["speaker"]
-                text = segment["text"]
-                color = speaker_colors.get(speaker, "000000")  # Cor padrão é preto
-
-                # Adiciona um parágrafo com a cor do texto
-                paragraph = doc.add_paragraph()
-
-                # Adiciona o nome do falante em cor
-                speaker_run = paragraph.add_run(f"{speaker}: ")
-                speaker_run.font.color.rgb = docx.shared.RGBColor(
-                    int(color[:2], 16), int(color[2:4], 16), int(color[4:], 16)
-                )
-
-                # Adiciona o texto do falante em preto
-                text_run = paragraph.add_run(text)
-                text_run.font.color.rgb = docx.shared.RGBColor(0, 0, 0)  # Preto
-
-            bio = io.BytesIO()
-            doc.save(bio)
-            bio.seek(0)
-
-            # Botão para baixar o arquivo transcrito
-            st.download_button(
-                label="Baixar Transcrição",
-                data=bio.getvalue(),
-                file_name=file_name,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            )
+            else:
+                st.error("Transcrição já realizada.")
         else:
-            st.error("Por favor, selecione um arquivo.")
-
+                st.error("Por favor, selecione um arquivo.")
 
 def main():
     user_id = login()
 
-
     if st.session_state.get('authenticated'):
         _style_language_uploader()
-        usuario_logado = st.session_state.get("user_id")
-        print(f"DEBUG: Usuário logado = {usuario_logado}")  # Log no terminal
+        # usuario_logado = st.session_state.get("user_id")
+        # print(f"DEBUG: Usuário logado = {usuario_logado}")  # Log no terminal
 
-        if st.sidebar.button("Logout"):
-            usuario_logado = st.session_state.get("user_id")
-            print(f"DEBUG: Usuário deslogando")  # Log no terminal
-            # st.logout()
-            st.session_state.clear()
-            st.rerun()
 
         # Tudo relacionado à sidebar só aparece se estiver autenticado
         st.sidebar.subheader("Navegação no sistema")
@@ -342,6 +326,14 @@ def main():
         )
         st.sidebar.subheader("Download de transcrições")
         st.sidebar.markdown("Clique em ``Baixar Transcrição`` para obter o arquivo em .docx.")
+
+        st.sidebar.divider()
+        if st.sidebar.button("Logout"):
+            # usuario_logado = st.session_state.get("user_id")
+            # print(f"DEBUG: Usuário deslogando")  # Log no terminal
+            # st.logout()
+            st.session_state.clear()
+            st.rerun()
 
         pages = [
             st.Page(

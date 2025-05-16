@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS transcriptions (
     file_name VARCHAR(255),
     transcription TEXT,
     model VARCHAR(10),
+    status BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     execution_time FLOAT,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
