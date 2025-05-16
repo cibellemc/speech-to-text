@@ -2,7 +2,7 @@
 
 services:
   postgres:
-    container_name: db-transcritor
+    container_name: cuda-db-transcritor
     image: postgres:13
     environment:
       POSTGRES_DB: "transcritor"
@@ -14,26 +14,21 @@ services:
     ports:
       - "5432:5432"
 
-  # ollama:
-  #   container_name: ollama-server
-  #   image: ollama/ollama:latest
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-
-  # app:
-  #   image: speech-to-text:1.1
-  #   container_name: app-transcritor
-  #   build: .
-  #   depends_on:
-  #     - postgres
-  #     - ollama
-  #   ports:
-  #     - "8501:8501" 
-  #   environment:
-  #     - OLLAMA_HOST=http://ollama:11434
-
+  app:
+    image: cibellemc/speech-to-text:2.0
+    container_name: app-transcritor
+    build: .
+    depends_on:
+      - postgres
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+    ports:
+      - "8501:8501" 
 volumes:
   postgres_data:
-  ollama_data:

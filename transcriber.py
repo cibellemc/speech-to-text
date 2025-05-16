@@ -1,8 +1,9 @@
+import torch
 import whisper
-import subprocess
 import tempfile
-from pyannote.audio import Pipeline
+import subprocess
 from pyannote.core import Segment
+from pyannote.audio import Pipeline
 
 def convert_to_wav(input_file):
     """Converte qualquer arquivo (áudio ou vídeo) para WAV 16kHz mono."""
@@ -29,11 +30,13 @@ def convert_to_wav(input_file):
 
 
 def transcribe(input_file, whisper_model):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
     # Converte para WAV (aceita vídeo e áudio)
     # audio_path = convert_to_wav(input_file)
 
     # Transcreve com Whisper
-    model = whisper.load_model(whisper_model)
+    model = whisper.load_model(whisper_model, device=device)
     result = model.transcribe(input_file, language="pt")
     segments = result["segments"]
 
