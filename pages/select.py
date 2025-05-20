@@ -3,12 +3,31 @@ from sqlalchemy import text
 import streamlit as st
 from services.database import conn
 import pandas as pd
+import io
+import os
+import docx
+from datetime import datetime
 
+def save_transcription_to_db(user_id, file_name, transcription_text, model, execution_time):
+    with conn.session as session:
+        session.execute(
+            text("""
+                INSERT INTO transcriptions 
+                (user_id, file_name, transcription, model, execution_time) 
+                VALUES(:user_id, :file_name, :transcription, :model, :execution_time)
+            """),
+            {
+                "user_id": user_id,
+                "file_name": file_name,
+                "transcription": transcription_text,
+                "model": model,
+                "execution_time": execution_time,
+            },
+        )
+        session.commit()
 
 # Função para baixar arquivos DOCX
 def download_transcription(file_name, transcription_text, index):
-    import io
-    import docx
 
     # Cria um arquivo docx na memória
     doc = docx.Document()
@@ -26,7 +45,6 @@ def download_transcription(file_name, transcription_text, index):
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         key=f"download_button_{index}",  # Unique key based on index
     )
-
 
 # Realiza o SELECT no banco de dados para obter todas as transcrições
 def fetch_transcriptions(user_id, limit=10, offset=0):

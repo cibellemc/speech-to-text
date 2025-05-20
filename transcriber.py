@@ -1,3 +1,4 @@
+import os
 import torch
 import whisper
 import tempfile
@@ -6,9 +7,10 @@ from pyannote.core import Segment
 from pyannote.audio import Pipeline
 
 def convert_to_wav(input_file):
-    """Converte qualquer arquivo (áudio ou vídeo) para WAV 16kHz mono."""
-    # Cria arquivo temporário de entrada
-    temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=".input")
+    """Converte qualquer arquivo (áudio ou vídeo) para WAV 16kHz mono com qualidade ideal para transcrição."""
+    # Cria arquivo temporário de entrada com a extensão correta
+    ext = os.path.splitext(input_file.name)[-1]
+    temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
     temp_input.write(input_file.getbuffer())
     temp_input.flush()
     temp_input.close()
@@ -18,13 +20,19 @@ def convert_to_wav(input_file):
     temp_wav.close()
 
     # Usa ffmpeg para extrair e converter o áudio
-    subprocess.call([
-        "ffmpeg", "-i", temp_input.name,
-        "-ar", "16000",  # taxa de amostragem 16kHz
-        "-ac", "1",      # mono
-        temp_wav.name,
-        "-y"
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.run([
+            "ffmpeg", "-i", temp_input.name,
+            "-vn",                 # remove vídeo, se existir
+            "-acodec", "pcm_s16le",# formato WAV PCM Linear 16-bit
+            "-ar", "16000",        # taxa de amostragem 16kHz
+            "-ac", "1",            # mono
+            temp_wav.name,
+            "-y"                   # sobrescreve se necessário
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Erro na conversão com ffmpeg: {e}")
+        return None
 
     return temp_wav.name
 

@@ -1,6 +1,7 @@
 .env
 .git
 venv/
+test/
 *.wav
 assets/
 README.md

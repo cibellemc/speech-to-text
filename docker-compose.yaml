@@ -1,5 +1,3 @@
-# version: "3.8"
-
 services:
   postgres:
     container_name: cuda-db-transcritor
@@ -13,11 +11,19 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Executa automaticamente
     ports:
       - "5432:5432"
+  
+  ollama:
+    container_name: ollama-server
+    image: ollama/ollama:latest
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_data:/root/.ollama
 
   app:
-    image: cibellemc/speech-to-text:2.0
-    container_name: app-transcritor
     build: .
+    image: speech-to-text:2.0
+    container_name: cuda-app-transcritor
     depends_on:
       - postgres
     deploy:

@@ -12,8 +12,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Cria aliases: python → python3, pip → pip3
-RUN ln -s /usr/bin/python3 /usr/bin/python && \
-    ln -s /usr/bin/pip3 /usr/bin/pip
+RUN ln -sf /usr/bin/python3 /usr/bin/python && \
+    [ -f /usr/bin/pip ] || ln -s /usr/bin/pip3 /usr/bin/pip
 
 # Atualiza pip
 RUN pip install --upgrade pip

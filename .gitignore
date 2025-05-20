@@ -3,3 +3,5 @@ __pycache__/
 temp_audio_files
 .streamlit
 *.wav
+test/
+assets/
