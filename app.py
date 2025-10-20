@@ -58,12 +58,9 @@ def _style_language_uploader():
     st.markdown(hide_label, unsafe_allow_html=True)
 
 
-import os
-import requests
-
 def generate_summary(text_content):
     try:
-        ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11435')
+        ollama_host = 'http://ollama:11434'
         
         
         prompt = f"""
@@ -181,12 +178,19 @@ def upload_view():
                         )
                         
                         # Gera a ata em paralelo
+                        if not text_content.strip():
+                            st.warning("A transcrição não gerou texto (áudio pode estar em silêncio). Impossível gerar ata.")
+                            return
+
                         with st.spinner("Gerando resumo automático..."):
                             summary = generate_summary(text_content)
                             
-                            # Verifica se a ata foi gerada corretamente
-                            if not summary or "Erro" in summary:
-                                st.error("Falha na geração da ata. Tente novamente.")
+                            # MODIFICAÇÃO: Agora exibe o erro detalhado que vem da função generate_summary
+                            if not summary:
+                                st.error("Falha na geração da ata: O modelo de IA retornou uma resposta vazia. Tente novamente.")
+                                return
+                            if "Erro" in summary:
+                                st.error(f"Falha na geração da ata: {summary}")
                                 return
 
                     end_time = time.time()

@@ -3,8 +3,27 @@ import torch
 import whisper
 import tempfile
 import subprocess
+import streamlit as st
 from pyannote.core import Segment
 from pyannote.audio import Pipeline
+
+@st.cache_resource
+def load_models(whisper_model_name):
+    print("Carregando modelos (isso só deve acontecer uma vez)...")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Usando dispositivo: {device}")
+    
+    whisper_model = whisper.load_model(whisper_model_name, device=device)
+    
+    # Certifique-se de que o token está seguro (ex: st.secrets)
+    pyannote_pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1", 
+        use_auth_token="hf..." 
+    )
+    pyannote_pipeline.to(torch.device(device))
+    
+    print("Modelos carregados.")
+    return whisper_model, pyannote_pipeline, device
 
 def convert_to_wav(input_file):
     """Converte qualquer arquivo (áudio ou vídeo) para WAV 16kHz mono com qualidade ideal para transcrição."""
@@ -37,19 +56,20 @@ def convert_to_wav(input_file):
     return temp_wav.name
 
 
-def transcribe(input_file, whisper_model):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+def transcribe(input_file, whisper_model_name):
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Converte para WAV (aceita vídeo e áudio)
     # audio_path = convert_to_wav(input_file)
 
     # Transcreve com Whisper
-    model = whisper.load_model(whisper_model, device=device)
+    model, pipeline, device = load_models(whisper_model_name)
+
     result = model.transcribe(input_file, language="pt")
     segments = result["segments"]
 
     # === 2. Diariza com pyannote ===
-    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token="hf...")
+    # pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token="")
     diarization_result = pipeline(input_file)
 
     # Atribui falante a cada trecho
