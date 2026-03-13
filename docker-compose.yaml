@@ -21,6 +21,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull qwen2.5:7b && ollama pull gemma2:9b && wait"]
 
   app:
     build: .
@@ -31,10 +32,13 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:12345678@cuda-db-transcritor:5432/transcritor
       - OLLAMA_HOST=http://ollama-server:11434
+      - HF_TOKEN=hf_seu_token
+      - OLLAMA_TIMEOUT=600
+    volumes:
+      - .:/app
     ports:
       - "8501:8501"
     restart: unless-stopped
-
 volumes:
   postgres_data:
   ollama_data:

@@ -8,7 +8,7 @@ from datetime import datetime
 from pages.login import login
 from auth import authenticated_only
 from transcriber import convert_to_wav, transcribe
-from pages.select import display_transcriptions, fetch_transcription_by_file_name, save_transcription_to_db
+from pages.select import display_transcriptions, fetch_transcription_by_file_name, save_transcription_to_db, save_minutes_to_db
 
 def _style_language_uploader():
     languages = {
@@ -19,49 +19,22 @@ def _style_language_uploader():
         },
     }
 
-    hide_label = (
-        """
-        <style>
-            div[data-testid="stFileUploader"]>section[data-testid="stFileUploaderDropzone"]>button[data-testid="baseButton-secondary"] {
-               color:white;
-            }
-            # div[data-testid="stFileUploader"]>section[data-testid="stFileUploaderDropzone"]>button[data-testid="baseButton-secondary"]::after {
-            #     content: "BUTTON_TEXT";
-            #     color:black;
-            #     display: block;
-            #     position: absolute;
-            # }
-            div[data-testid="stFileUploaderDropzoneInstructions"]>div>span {
-               visibility:hidden;
-            }
-            div[data-testid="stFileUploaderDropzoneInstructions"]>div>span::after {
-               content:"INSTRUCTIONS_TEXT";
-               visibility:visible;
-               display:block;
-            }
-             div[data-testid="stFileUploaderDropzoneInstructions"]>div>small {
-               visibility:hidden;
-            }
-            div[data-testid="stFileUploaderDropzoneInstructions"]>div>small::before {
-               content:"FILE_LIMITS";
-               visibility:visible;
-               display:block;
-            }
-        </style>
-        """.replace(
-            "BUTTON_TEXT", languages.get("PT-BR").get("button")
-        )
-        .replace("INSTRUCTIONS_TEXT", languages.get("PT-BR").get("instructions"))
-        .replace("FILE_LIMITS", languages.get("PT-BR").get("limits"))
-    )
-
+    # Estilização do File Uploader para Português (Opcional se Streamlit suportar nativamente)
+    hide_label = """
+    <style>
+        div[data-testid="stFileUploader"] label {
+            display: none;
+        }
+    </style>
+    """
     st.markdown(hide_label, unsafe_allow_html=True)
 
 
-def generate_summary(text_content):
+def generate_summary(text_content, model_name="gemma2:9b"):
     try:
-        ollama_host = 'http://ollama:11434'
-        
+        # Pega o host e timeout do docker-compose
+        ollama_host = os.getenv('OLLAMA_HOST', 'http://ollama-server:11434')
+        ollama_timeout = int(os.getenv('OLLAMA_TIMEOUT', '300'))
         
         prompt = f"""
         Com base na transcrição abaixo, redija uma ATA formal em português brasileiro, seguindo estas regras: 
@@ -72,7 +45,7 @@ def generate_summary(text_content):
 
         ---
         **Data**: [omitir]  
-        **Local**: [omitit]  
+        **Local**: [omitir]  
 
         **Presentes**:  
         - [omitir]  
@@ -95,230 +68,136 @@ def generate_summary(text_content):
         response = requests.post(
             f'{ollama_host}/api/generate',
             json={
-                "model": "llama3.2:latest",
+                "model": model_name,
                 "prompt": prompt,
                 "stream": False,
                 "options": { "temperature": 0.2 } 
             },
-            # timeout=10  # Evita timeout infinito
+            timeout=ollama_timeout
         )
-
+        
         if response.status_code == 200:
-            return response.json().get('response', "Resposta vazia do Ollama.")
+            return response.json().get('response', '')
         else:
             return f"Erro na API: {response.status_code} - {response.text}"
-
-    except requests.exceptions.RequestException as e:
-        return f"Erro de conexão: {str(e)}"
+            
     except Exception as e:
-        return f"Erro inesperado: {str(e)}"
+        return f"Erro ao gerar ata: {str(e)}"
 
-
-# Use o decorator nas suas views:
 @authenticated_only
 def upload_view():
-    st.title("Realize uma nova Transcrição")
-    # st.markdown("Escolha entre fazer upload de um arquivo de áudio ou transcrever em tempo real usando seu microfone.")
-    st.markdown("Clique em `Browse files` para buscar no computador o áudio desejado. Você também tem a opção de arrastar e soltar o arquivo para a área de upload.")
-    st.markdown("Os modelos de transcrição vão do ``tiny`` ao ``large``. Quanto maior a precisão/confiabilidade (mais próximo de ``large``), mais tempo será necessário para processar sua solicitação.")
+    st.title("Sistema de Transcrição e Atas")
+    
+    tab1, tab2 = st.tabs(["Nova Transcrição", "Gerar Ata de Arquivo"])
 
-    speaker_colors = {
-        "SPEAKER 1": "FF0000", "SPEAKER 2": "00FF00", "SPEAKER 3": "0000FF",
-        "SPEAKER 4": "FFFF00", "SPEAKER 5": "FF00FF", "SPEAKER 6": "00FFFF",
-        "SPEAKER 7": "FFA500", "SPEAKER 8": "800080", "SPEAKER 9": "808080",
-        "SPEAKER 10": "000000",
-    }
+    with tab1:
+        st.markdown("### Transcrição de Áudio/Vídeo")
+        st.info("Escolha entre o processamento automático ou gerar um arquivo para edição manual posterior.")
 
-    with st.form("input_form"):
-        input_file = st.file_uploader(
-            "Arquivos de áudio",
-            type=["mp4", "m4a", "mp3", "mkv", "wav"],
-            accept_multiple_files=False,
-        )
+        with st.form("transcription_form"):
+            input_file = st.file_uploader("Selecione o arquivo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
+            whisper_model = st.selectbox("Modelo", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
+            
+            col_a, col_b = st.columns(2)
+            btn_auto = col_a.form_submit_button("Transcrição e Ata Automáticos", use_container_width=True)
+            btn_manual = col_b.form_submit_button("Gerar Transcrição para Edição", use_container_width=True)
 
-        whisper_model = st.selectbox(
-            "Modelo de Transcrição",
-            options=["tiny", "base", "small", "medium", "large", "turbo"],
-            index=5,
-        )
-
-        btn_transcribe = st.form_submit_button(label="Iniciar")
-
-    if btn_transcribe:
-        if input_file:
-            user_id = st.session_state.get("user_id")
-            file_name = (
-                f"{input_file.name}-{whisper_model}-"
-                f"{datetime.today().strftime('%d-%m-%y')}.docx"
-            )
-
-            existing_transcription = fetch_transcription_by_file_name(user_id, file_name)
-
-            if existing_transcription is None:
-                try:
-                    # Processamento principal
-                    input_file = convert_to_wav(input_file)
-                    start_time = time.time()
-
-                    # Container para mostrar os resultados
-                    result_container = st.container()
-                    
-                    with st.spinner("Processando áudio e gerando conteúdo..."):
-                        # Executa a transcrição
-                        segments = transcribe(input_file, whisper_model)
-                        
-                        # Verifica se a transcrição foi bem-sucedida
-                        if not segments or len(segments) == 0:
-                            st.error("Falha na transcrição: nenhum segmento foi gerado.")
-                            return
-                        
-                        # Prepara o conteúdo de texto
-                        text_content = "\n".join(
-                            [f"{segment['speaker']}: {segment['text']}" for segment in segments]
-                        )
-                        
-                        # Gera a ata em paralelo
-                        if not text_content.strip():
-                            st.warning("A transcrição não gerou texto (áudio pode estar em silêncio). Impossível gerar ata.")
-                            return
-
-                        with st.spinner("Gerando resumo automático..."):
-                            summary = generate_summary(text_content)
-                            
-                            # MODIFICAÇÃO: Agora exibe o erro detalhado que vem da função generate_summary
-                            if not summary:
-                                st.error("Falha na geração da ata: O modelo de IA retornou uma resposta vazia. Tente novamente.")
-                                return
-                            if "Erro" in summary:
-                                st.error(f"Falha na geração da ata: {summary}")
-                                return
-
-                    end_time = time.time()
-                    execution_time = end_time - start_time
-
-                    # Mostra os resultados no container
-                    with result_container:
-                        st.success("Processamento concluído com sucesso!")
-                        st.write(f"Tempo total de execução: {execution_time:.2f} segundos")
-                        
-                        # Mostra a transcrição
-                        st.markdown("### Transcrição:")
-                        for segment in segments:
-                            speaker = segment["speaker"]
-                            color = speaker_colors.get(speaker, "000000")
-                            st.markdown(
-                                f"<span><strong style='color: #{color};'>{speaker}:</strong> {segment['text']}</span>",
-                                unsafe_allow_html=True,
-                            )
-                        
-                        # Mostra a ata
-                        st.markdown("### Resumo Automático:")
-                        st.write(summary)
-
-                    # Prepara o conteúdo completo para salvar no banco
-                    full_content = f"{text_content}\n\n=== RESUMO EM FORMA DE ATA ===\n\n{summary}"
-                    
-                    # Salva no banco de dados
-                    save_transcription_to_db(
-                        user_id, file_name, full_content, whisper_model, execution_time
-                    )
-
-                    # Gera o documento Word apenas se tudo estiver OK
-                    def generate_document(segments, summary):
-                        doc = docx.Document()
-                        doc.add_heading('Transcrição Completa', level=1)
-                        
-                        for segment in segments:
-                            speaker = segment["speaker"]
-                            color = speaker_colors.get(speaker, "000000")
-                            
-                            paragraph = doc.add_paragraph()
-                            speaker_run = paragraph.add_run(f"{speaker}: ")
-                            speaker_run.font.color.rgb = docx.shared.RGBColor(
-                                int(color[:2], 16), int(color[2:4], 16), int(color[4:], 16)
-                            )
-                            text_run = paragraph.add_run(segment["text"])
-                            text_run.font.color.rgb = docx.shared.RGBColor(0, 0, 0)
-                        
-                        doc.add_heading('Ata de Reunião', level=1)
-                        doc.add_paragraph(summary)
-                        
-                        bio = io.BytesIO()
-                        doc.save(bio)
-                        bio.seek(0)
-                        return bio
-
-                    # Gera e disponibiliza o documento para download
-                    doc_bytes = generate_document(segments, summary)
-                    
-                    st.download_button(
-                        label="Baixar Transcrição Completa",
-                        data=doc_bytes.getvalue(),
-                        file_name=file_name,
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-
-                except Exception as e:
-                    st.error(f"Ocorreu um erro durante o processamento: {str(e)}")
-                    st.info("Por favor, tente novamente ou contate o suporte.")
+        if btn_auto or btn_manual:
+            if not input_file:
+                st.error("Por favor, selecione um arquivo.")
             else:
-                st.error("Transcrição já realizada.")
-        else:
-            st.error("Por favor, selecione um arquivo.")
+                process_audio(input_file, whisper_model, is_automatic=btn_auto)
 
+    with tab2:
+        st.markdown("### Gerar Ata a partir de Transcrição Editada")
+        st.info("Faça o upload do arquivo DOCX ou TXT editado para gerar a ata final.")
+        
+        with st.form("minutes_form"):
+            edited_file = st.file_uploader("Arquivo editado", type=["docx", "txt"])
+            ai_model = st.selectbox("Modelo de IA", options=["gemma2:9b", "qwen2.5:7b", "llama3.2"], index=0)
+            btn_gen_minutes = st.form_submit_button("Gerar Ata Agora")
+            
+        if btn_gen_minutes:
+            if not edited_file:
+                st.error("Selecione o arquivo editado.")
+            else:
+                process_edited_file(edited_file, ai_model)
+
+def process_audio(input_file, whisper_model, is_automatic):
+    user_id = st.session_state.get("user_id")
+    audio_name = input_file.name
+    date_str = datetime.today().strftime('%d-%m-%y')
+    
+    try:
+        with st.spinner("Processando áudio (WhisperX)..."):
+            # Converte e Transcreve
+            from transcriber import convert_to_wav, transcribe
+            wav_path = convert_to_wav(input_file)
+            hf_token = os.getenv("HF_TOKEN")
+            segments = transcribe(wav_path, whisper_model, hf_token)
+            if not segments:
+                st.error("Erro na transcrição.")
+                return
+
+            text_content = "\n".join([f"{s['speaker']}: {s['text']}" for s in segments])
+            t_file_name = f"transcricao_{audio_name}_{whisper_model}_{date_str}.docx"
+            
+            # Salva Transcrição
+            t_id = save_transcription_to_db(user_id, audio_name, t_file_name, text_content, whisper_model, 0)
+            
+            if is_automatic:
+                with st.spinner("Gerando Ata Automática (Ollama)..."):
+                    # Usando gemma2:9b como padrão para o fluxo automático
+                    summary = generate_summary(text_content, model_name="gemma2:9b") 
+                    m_file_name = f"ata_{audio_name}_{date_str}.docx"
+                    save_minutes_to_db(user_id, t_id, m_file_name, summary, "gemma2:9b", "automatic")
+                    st.success("Transcrição e Ata geradas com sucesso!")
+                    st.markdown("### Ata Gerada:")
+                    st.write(summary)
+            else:
+                from pages.select import generate_transcription_docx
+                docx_bio = generate_transcription_docx(segments, t_file_name)
+                st.success("Transcrição concluída! Baixe o arquivo para editar.")
+                st.download_button("Baixar Transcrição para Edição", docx_bio, t_file_name)
+                
+    except Exception as e:
+        st.error(f"Erro no processamento: {e}")
+
+def process_edited_file(file, ai_model):
+    user_id = st.session_state.get("user_id")
+    try:
+        content = ""
+        if file.name.endswith(".docx"):
+            doc = docx.Document(file)
+            content = "\n".join([p.text for p in doc.paragraphs])
+        else:
+            content = file.read().decode("utf-8")
+        
+        with st.spinner(f"Gerando Ata via {ai_model}..."):
+            summary = generate_summary(content, model_name=ai_model)
+            m_file_name = f"ata_manual_{file.name}_{datetime.today().strftime('%d-%m-%y')}.docx"
+            save_minutes_to_db(user_id, None, m_file_name, summary, ai_model, "manual")
+            st.success("Ata gerada com sucesso!")
+            st.write(summary)
+            
+            from pages.select import generate_minutes_docx
+            docx_bio = generate_minutes_docx(file.name, summary)
+            st.download_button("Baixar Ata Final", docx_bio, m_file_name)
+            
+    except Exception as e:
+        st.error(f"Erro ao ler arquivo: {e}")
 
 def main():
-    user_id = login()
-
-    if st.session_state.get('authenticated'):
-        _style_language_uploader()
-        # usuario_logado = st.session_state.get("user_id")
-        # print(f"DEBUG: Usuário logado = {usuario_logado}")  # Log no terminal
-
-
-        # Tudo relacionado à sidebar só aparece se estiver autenticado
-        st.sidebar.subheader("Navegação no sistema")
-        st.sidebar.markdown(
-            "Clique em `Nova transcrição` para realizar transcrição de um novo arquivo. "
-            "Caso deseje consultar transcrições já realizadas, clique em `Histórico`."
-        )
-        st.sidebar.subheader("Download de transcrições")
-        st.sidebar.markdown("Clique em ``Baixar Transcrição`` para obter o arquivo em .docx.")
-
-        st.sidebar.divider()
-        if st.sidebar.button("Logout"):
-            # usuario_logado = st.session_state.get("user_id")
-            # print(f"DEBUG: Usuário deslogando")  # Log no terminal
-            # st.logout()
-            st.session_state.clear()
-            st.rerun()
-
-        pages = [
-            st.Page(
-                upload_view,
-                title="Nova transcrição",
-                icon=":material/insert_drive_file:",
-            ),
-            st.Page(
-                lambda: display_transcriptions(user_id),
-                title="Histórico", 
-                icon=":material/history:"
-            ),
-        ]
+    if "authenticated" not in st.session_state or not st.session_state.authenticated:
+        login()
     else:
-
-        st.sidebar.empty()
-        pages = [
-            st.Page(
-                login,
-                title="Login",
-                icon=":material/login:",
-            )
-        ]
-
-    pg = st.navigation(pages)
-    pg.run()
-
+        # Sidebar para navegação
+        st.sidebar.title(f"Bem-vindo, {st.session_state.username}")
+        if st.sidebar.button("Logout"):
+            st.session_state.authenticated = False
+            st.rerun()
+            
+        upload_view()
 
 if __name__ == "__main__":
     main()

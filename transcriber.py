@@ -1,96 +1,83 @@
 import os
 import torch
-import whisper
+import whisperx
 import tempfile
 import subprocess
 import streamlit as st
-from pyannote.core import Segment
-from pyannote.audio import Pipeline
 
 @st.cache_resource
-def load_models(whisper_model_name):
-    print("Carregando modelos (isso só deve acontecer uma vez)...")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Usando dispositivo: {device}")
+def load_models(whisper_model_name, hf_token, device="cuda", compute_type="float16"):
+    if device == "cpu":
+        compute_type = "int8"
+        
+    print(f"Carregando modelos WhisperX ({whisper_model_name}) no dispositivo: {device}...")
     
-    whisper_model = whisper.load_model(whisper_model_name, device=device)
+    # 1. Carrega o modelo de transcrição
+    model = whisperx.load_model(whisper_model_name, device, compute_type=compute_type)
     
-    # Certifique-se de que o token está seguro (ex: st.secrets)
-    pyannote_pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.1", 
-        use_auth_token="hf..." 
+    # 2. Carrega o pipeline de diarização
+    # Importante: O token deve ser configurado no Hugging Face
+    diarize_model = whisperx.diarize.DiarizationPipeline(
+        token=hf_token, device=device
     )
-    pyannote_pipeline.to(torch.device(device))
     
     print("Modelos carregados.")
-    return whisper_model, pyannote_pipeline, device
+    return model, diarize_model
 
 def convert_to_wav(input_file):
-    """Converte qualquer arquivo (áudio ou vídeo) para WAV 16kHz mono com qualidade ideal para transcrição."""
-    # Cria arquivo temporário de entrada com a extensão correta
+    """Converte qualquer arquivo para WAV 16kHz mono."""
     ext = os.path.splitext(input_file.name)[-1]
     temp_input = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
     temp_input.write(input_file.getbuffer())
     temp_input.flush()
     temp_input.close()
 
-    # Cria arquivo temporário de saída WAV
     temp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
     temp_wav.close()
 
-    # Usa ffmpeg para extrair e converter o áudio
     try:
         subprocess.run([
             "ffmpeg", "-i", temp_input.name,
-            "-vn",                 # remove vídeo, se existir
-            "-acodec", "pcm_s16le",# formato WAV PCM Linear 16-bit
-            "-ar", "16000",        # taxa de amostragem 16kHz
-            "-ac", "1",            # mono
-            temp_wav.name,
-            "-y"                   # sobrescreve se necessário
+            "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+            temp_wav.name, "-y"
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     except subprocess.CalledProcessError as e:
-        print(f"Erro na conversão com ffmpeg: {e}")
+        print(f"Erro na conversão ffmpeg: {e}")
         return None
+    finally:
+        if os.path.exists(temp_input.name):
+            os.unlink(temp_input.name)
 
     return temp_wav.name
 
+def transcribe(audio_path, whisper_model_name, hf_token, batch_size=16):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    model, diarize_model = load_models(whisper_model_name, hf_token, device)
 
-def transcribe(input_file, whisper_model_name):
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # Converte para WAV (aceita vídeo e áudio)
-    # audio_path = convert_to_wav(input_file)
-
-    # Transcreve com Whisper
-    model, pipeline, device = load_models(whisper_model_name)
-
-    result = model.transcribe(input_file, language="pt")
-    segments = result["segments"]
-
-    # === 2. Diariza com pyannote ===
-    # pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token="")
-    diarization_result = pipeline(input_file)
-
-    # Atribui falante a cada trecho
-    for segment in segments:
-        start = segment["start"]
-        end = segment["end"]
-        segment_speaker = "UNKNOWN"
-        for turn, _, speaker in diarization_result.itertracks(yield_label=True):
-            if Segment(start, end).intersects(turn):
-                segment_speaker = f"SPEAKER {int(speaker.split('_')[-1]) + 1}" if speaker.startswith("SPEAKER_") else speaker
-                break
-        segment["speaker"] = segment_speaker
-
+    # 1. Transcrever
+    audio = whisperx.load_audio(audio_path)
+    result = model.transcribe(audio, batch_size=batch_size)
+    
+    # 2. Alinhar (melhora precisão dos timestamps)
+    model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
+    result = whisperx.align(result["segments"], model_a, metadata, audio, device, return_char_alignments=False)
+    
+    # 3. Diarização
+    diarize_segments = diarize_model(audio)
+    
+    # 4. Atribuir falantes aos segmentos
+    result = whisperx.assign_word_speakers(diarize_segments, result)
+    
     # === Agrupamento de falas consecutivas por falante ===
     grouped_output = []
-    if segments:
-        current_speaker = segments[0]["speaker"]
-        current_text = segments[0]["text"].strip()
+    if result["segments"]:
+        current_speaker = result["segments"][0].get("speaker", "UNKNOWN")
+        current_text = result["segments"][0]["text"].strip()
+        current_start = result["segments"][0]["start"]
 
-        for seg in segments[1:]:
-            speaker = seg["speaker"]
+        for seg in result["segments"][1:]:
+            speaker = seg.get("speaker", "UNKNOWN")
             text = seg["text"].strip()
 
             if speaker == current_speaker:
@@ -98,15 +85,26 @@ def transcribe(input_file, whisper_model_name):
             else:
                 grouped_output.append({
                     "speaker": current_speaker,
-                    "text": current_text
+                    "text": current_text,
+                    "start": current_start
                 })
                 current_speaker = speaker
                 current_text = text
+                current_start = seg["start"]
 
         # Último grupo
         grouped_output.append({
             "speaker": current_speaker,
-            "text": current_text
+            "text": current_text,
+            "start": current_start
         })
 
     return grouped_output
+
+def format_timestamp(seconds):
+    """Converte segundos em [HH:MM:SS]"""
+    td = float(seconds)
+    hours = int(td // 3600)
+    minutes = int((td % 3600) // 60)
+    secs = int(td % 60)
+    return f"[{hours:02d}:{minutes:02d}:{secs:02d}]"
