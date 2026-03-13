@@ -8,10 +8,11 @@ services:
       POSTGRES_PASSWORD: "12345678"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Executa automaticamente
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
-  
+    restart: unless-stopped
+
   ollama:
     container_name: ollama-server
     image: ollama/ollama:latest
@@ -19,22 +20,21 @@ services:
       - "11435:11434"
     volumes:
       - ollama_data:/root/.ollama
+    restart: unless-stopped
 
   app:
     build: .
-    image: speech-to-text:2.0
     container_name: cuda-app-transcritor
     depends_on:
       - postgres
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              capabilities: [gpu]
+      - ollama
     environment:
-      NVIDIA_VISIBLE_DEVICES: all
+      - DATABASE_URL=postgresql://postgres:12345678@cuda-db-transcritor:5432/transcritor
+      - OLLAMA_HOST=http://ollama-server:11434
     ports:
-      - "8501:8501" 
+      - "8501:8501"
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  ollama_data:

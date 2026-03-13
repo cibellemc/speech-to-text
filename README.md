@@ -29,14 +29,16 @@ git clone git@github.com:cibellemc/speech-to-text.git
 cd/speech-to-text
 ```
 
-3. Faça o build da imagem (Dockerfile)
-```
-sudo docker build -t speech-to-text:1.0 .
+3. Suba os containers (o build da imagem será feito automaticamente)
+
+Se você **não possui** uma placa de vídeo dedicada (apenas CPU):
+```bash
+sudo docker compose up -d --build
 ```
 
-4. Suba os containers (docker-compose.yaml)
-```
-sudo docker-compose up -d
+Se você **possui** uma placa de vídeo NVIDIA e já configurou o [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html):
+```bash
+sudo docker compose -f docker-compose.yaml -f docker-compose.gpu.yaml up -d --build
 ```
 
 Caso queira mudar configurações de portas, nome de banco de dados ou senha, ou nome dos containers, edite os arquivos `.streamlit/secrets.toml` e `docker-compose.yaml`.
