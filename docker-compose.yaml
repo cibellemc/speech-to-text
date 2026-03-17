@@ -32,7 +32,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:12345678@cuda-db-transcritor:5432/transcritor
       - OLLAMA_HOST=http://ollama-server:11434
-      - HF_TOKEN=hf_seu_token
+      - HF_TOKEN=${HF_TOKEN}
       - OLLAMA_TIMEOUT=600
     volumes:
       - .:/app

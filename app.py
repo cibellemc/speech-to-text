@@ -5,10 +5,10 @@ import time
 import requests
 import streamlit as st
 from datetime import datetime
-from pages.login import login
+from views.login import login
 from auth import authenticated_only
 from transcriber import convert_to_wav, transcribe
-from pages.select import display_transcriptions, fetch_transcription_by_file_name, save_transcription_to_db, save_minutes_to_db
+from views.select import display_transcriptions, fetch_transcription_by_file_name, save_transcription_to_db, save_minutes_to_db
 
 def _style_language_uploader():
     languages = {
@@ -85,43 +85,62 @@ def generate_summary(text_content, model_name="gemma2:9b"):
         return f"Erro ao gerar ata: {str(e)}"
 
 @authenticated_only
-def upload_view():
-    st.title("Sistema de Transcrição e Atas")
-    
-    tab1, tab2 = st.tabs(["Nova Transcrição", "Gerar Ata de Arquivo"])
+def transcription_plus_ata_view():
+    st.title("Transcrição + Ata")
+    st.markdown("### Transcrição e Ata Automáticos")
+    st.info("O áudio será transcrito e uma ata será gerada automaticamente usando o modelo padrão.")
 
-    with tab1:
-        st.markdown("### Transcrição de Áudio/Vídeo")
-        st.info("Escolha entre o processamento automático ou gerar um arquivo para edição manual posterior.")
-
-        with st.form("transcription_form"):
-            input_file = st.file_uploader("Selecione o arquivo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
-            whisper_model = st.selectbox("Modelo", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
-            
-            col_a, col_b = st.columns(2)
-            btn_auto = col_a.form_submit_button("Transcrição e Ata Automáticos", use_container_width=True)
-            btn_manual = col_b.form_submit_button("Gerar Transcrição para Edição", use_container_width=True)
-
-        if btn_auto or btn_manual:
-            if not input_file:
-                st.error("Por favor, selecione um arquivo.")
-            else:
-                process_audio(input_file, whisper_model, is_automatic=btn_auto)
-
-    with tab2:
-        st.markdown("### Gerar Ata a partir de Transcrição Editada")
-        st.info("Faça o upload do arquivo DOCX ou TXT editado para gerar a ata final.")
+    with st.form("transcription_auto_form"):
+        input_file = st.file_uploader("Selecione o arquivo de áudio/vídeo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
+        whisper_model = st.selectbox("Modelo Whisper (Transcrição)", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
         
-        with st.form("minutes_form"):
-            edited_file = st.file_uploader("Arquivo editado", type=["docx", "txt"])
-            ai_model = st.selectbox("Modelo de IA", options=["gemma2:9b", "qwen2.5:7b", "llama3.2"], index=0)
-            btn_gen_minutes = st.form_submit_button("Gerar Ata Agora")
-            
-        if btn_gen_minutes:
-            if not edited_file:
-                st.error("Selecione o arquivo editado.")
-            else:
-                process_edited_file(edited_file, ai_model)
+        btn_auto = st.form_submit_button("Iniciar Transcrição e Ata", use_container_width=True)
+
+    if btn_auto:
+        if not input_file:
+            st.error("Por favor, selecione um arquivo.")
+        else:
+            process_audio(input_file, whisper_model, is_automatic=True)
+
+@authenticated_only
+def transcription_only_view():
+    st.title("Apenas Transcrição")
+    st.markdown("### Gerar Transcrição para Edição")
+    st.info("Gera um arquivo DOCX com a transcrição bruta para que você possa revisar antes de gerar a ata.")
+
+    with st.form("transcription_only_form"):
+        input_file = st.file_uploader("Selecione o arquivo de áudio/vídeo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
+        whisper_model = st.selectbox("Modelo Whisper", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
+        
+        btn_manual = st.form_submit_button("Gerar Transcrição", use_container_width=True)
+
+    if btn_manual:
+        if not input_file:
+            st.error("Por favor, selecione um arquivo.")
+        else:
+            process_audio(input_file, whisper_model, is_automatic=False)
+
+@authenticated_only
+def ata_only_view():
+    st.title("Apenas Ata")
+    st.markdown("### Gerar Ata a partir de Transcrição Editada")
+    st.info("Faça o upload do arquivo DOCX ou TXT editado para gerar a ata final baseada no seu texto revisado.")
+    
+    with st.form("minutes_only_form"):
+        edited_file = st.file_uploader("Arquivo editado", type=["docx", "txt"])
+        ai_model = st.selectbox("Modelo de IA (LLM)", options=["gemma2:9b", "qwen2.5:7b", "llama3.2"], index=0)
+        btn_gen_minutes = st.form_submit_button("Gerar Ata Agora", use_container_width=True)
+        
+    if btn_gen_minutes:
+        if not edited_file:
+            st.error("Selecione o arquivo editado.")
+        else:
+            process_edited_file(edited_file, ai_model)
+
+@authenticated_only
+def history_view():
+    user_id = st.session_state.get("user_id")
+    display_transcriptions(user_id)
 
 def process_audio(input_file, whisper_model, is_automatic):
     user_id = st.session_state.get("user_id")
@@ -155,7 +174,7 @@ def process_audio(input_file, whisper_model, is_automatic):
                     st.markdown("### Ata Gerada:")
                     st.write(summary)
             else:
-                from pages.select import generate_transcription_docx
+                from views.select import generate_transcription_docx
                 docx_bio = generate_transcription_docx(segments, t_file_name)
                 st.success("Transcrição concluída! Baixe o arquivo para editar.")
                 st.download_button("Baixar Transcrição para Edição", docx_bio, t_file_name)
@@ -180,7 +199,7 @@ def process_edited_file(file, ai_model):
             st.success("Ata gerada com sucesso!")
             st.write(summary)
             
-            from pages.select import generate_minutes_docx
+            from views.select import generate_minutes_docx
             docx_bio = generate_minutes_docx(file.name, summary)
             st.download_button("Baixar Ata Final", docx_bio, m_file_name)
             
@@ -191,13 +210,27 @@ def main():
     if "authenticated" not in st.session_state or not st.session_state.authenticated:
         login()
     else:
-        # Sidebar para navegação
-        st.sidebar.title(f"Bem-vindo, {st.session_state.username}")
-        if st.sidebar.button("Logout"):
-            st.session_state.authenticated = False
-            st.rerun()
+        # Configuração da Sidebar
+        with st.sidebar:
+            st.title(f"Olá, {st.session_state.username}")
+            if st.button("Sair", use_container_width=True):
+                st.session_state.authenticated = False
+                st.rerun()
+            st.divider()
             
-        upload_view()
+        # Definição das Páginas para Navegação
+        pg_plus = st.Page(transcription_plus_ata_view, title="Transcrição + Ata", url_path="transcricao_e_ata")
+        pg_trans = st.Page(transcription_only_view, title="Apenas Transcrição", url_path="transcricao")
+        pg_ata = st.Page(ata_only_view, title="Apenas Ata", url_path="ata")
+        pg_history = st.Page(history_view, title="Histórico", url_path="historico")
+
+        # Inicializa a Navegação
+        pg = st.navigation({
+            "Menu Principal": [pg_plus, pg_trans, pg_ata],
+            "Gestão": [pg_history]
+        })
+        
+        pg.run()
 
 if __name__ == "__main__":
     main()

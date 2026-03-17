@@ -1,5 +1,5 @@
 # auth.py
-from pages.login import login
+from views.login import login
 import streamlit as st
 import hashlib
 import secrets
