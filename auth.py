@@ -4,6 +4,7 @@ import streamlit as st
 import hashlib
 import secrets
 import string
+import functools
 from sqlalchemy import text
 from services.database import conn
 
@@ -18,6 +19,7 @@ def hash_password(password, salt):
 # [Restante das funções de autenticação...]
 
 def authenticated_only(func):
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if not st.session_state.get('authenticated'):
             st.warning("Por favor, faça login para acessar esta página")
