@@ -139,50 +139,98 @@ def process_audio(input_file, whisper_model, is_automatic):
 @authenticated_only
 def transcription_plus_ata_view():
     st.title("Transcrição + Ata")
-    st.markdown("Gera ambos automaticamente")
+    
+    # Estado para controle
+    if "run_auto" not in st.session_state:
+        st.session_state.run_auto = False
+
     with st.form("auto_form"):
         file = st.file_uploader("Upload de áudio/vídeo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
         model = st.selectbox("Modelo Whisper", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
         if st.form_submit_button("Iniciar", use_container_width=True):
-            if file: process_audio(file, model, True)
-            else: st.error("Selecione um arquivo.")
+            if file:
+                st.session_state.run_auto = True
+                st.session_state.temp_file = file
+                st.session_state.temp_model = model
+            else:
+                st.error("Selecione um arquivo.")
+
+    # Executa fora do formulário
+    if st.session_state.run_auto:
+        process_audio(st.session_state.temp_file, st.session_state.temp_model, True)
+        st.session_state.run_auto = False # Reseta para a próxima execução
 
 @authenticated_only
 def transcription_only_view():
     st.title("Apenas Transcrição")
     st.markdown("Gera só a transcrição")
+    
+    # Criamos variáveis para persistir o estado fora do form
+    if "processar" not in st.session_state:
+        st.session_state.processar = False
+
     with st.form("trans_form"):
         file = st.file_uploader("Upload de áudio/vídeo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
         model = st.selectbox("Modelo Whisper", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
-        if st.form_submit_button("Gerar Transcrição", use_container_width=True):
-            if file: process_audio(file, model, False)
-            else: st.error("Selecione um arquivo.")
+        submit = st.form_submit_button("Gerar Transcrição", use_container_width=True)
+        
+        if submit:
+            if file:
+                st.session_state.processar = True
+                st.session_state.temp_file = file
+                st.session_state.temp_model = model
+            else:
+                st.error("Selecione um arquivo.")
+
+    # PROCESSAMENTO FORA DO FORM
+    if st.session_state.processar:
+        process_audio(st.session_state.temp_file, st.session_state.temp_model, False)
+        # Limpamos o estado para não reprocessar no próximo refresh
+        st.session_state.processar = False
 
 @authenticated_only
 def ata_only_view():
     st.title("Apenas Ata")
-    st.markdown("Upload de transcrição para gerar ata")
+    
+    if "run_ata_only" not in st.session_state:
+        st.session_state.run_ata_only = False
+
     with st.form("ata_form"):
         file = st.file_uploader("Upload de arquivo (.docx ou .txt)", type=["docx", "txt"])
         if st.form_submit_button("Gerar Ata", use_container_width=True):
             if file:
-                try:
-                    content = ""
-                    if file.name.endswith(".docx"):
-                        doc = docx.Document(file)
-                        content = "\n".join([p.text for p in doc.paragraphs])
-                    else:
-                        content = file.read().decode("utf-8")
-                    
-                    with st.spinner("Gerando Ata..."):
-                        summary = generate_summary(content)
-                        st.success("Ata gerada!")
-                        st.write(summary)
-                        from views.select import generate_minutes_docx
-                        st.download_button("Baixar Ata", generate_minutes_docx(file.name, summary), f"ata_{file.name}")
-                except Exception as e:
-                    st.error(f"Erro: {e}")
-            else: st.error("Selecione um arquivo.")
+                st.session_state.run_ata_only = True
+                st.session_state.temp_ata_file = file
+            else:
+                st.error("Selecione um arquivo.")
+
+    # Executa fora do formulário
+    if st.session_state.run_ata_only:
+        file = st.session_state.temp_ata_file
+        try:
+            content = ""
+            if file.name.endswith(".docx"):
+                doc = docx.Document(file)
+                content = "\n".join([p.text for p in doc.paragraphs])
+            else:
+                content = file.read().decode("utf-8")
+            
+            with st.spinner("Gerando Ata..."):
+                summary = generate_summary(content)
+                st.success("Ata gerada!")
+                st.write(summary)
+                
+                from views.select import generate_minutes_docx
+                # Agora o botão de download vai funcionar!
+                st.download_button(
+                    label="Baixar Ata", 
+                    data=generate_minutes_docx(file.name, summary), 
+                    file_name=f"ata_{file.name}.docx"
+                )
+        except Exception as e:
+            st.error(f"Erro: {e}")
+        finally:
+            st.session_state.run_ata_only = False
 
 @authenticated_only
 def history_view():
