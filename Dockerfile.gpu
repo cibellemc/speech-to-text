@@ -1,25 +1,30 @@
-FROM python:3.10-slim
 
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
+ 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    python3 python3-pip \
     ffmpeg \
     build-essential \
     libsndfile1 \
     portaudio19-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
+ 
+RUN ln -sf /usr/bin/python3 /usr/bin/python && \
+    [ -f /usr/bin/pip ] || ln -s /usr/bin/pip3 /usr/bin/pip
+ 
 RUN pip install --upgrade pip
-
-# PyTorch CPU-only (~200MB vs ~2GB da versão CUDA)
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-
+ 
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+ 
 WORKDIR /app
-
+ 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
+ 
 COPY . .
 RUN find . -type d -name "__pycache__" -exec rm -rf {} +
-
+ 
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+ 

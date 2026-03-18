@@ -24,7 +24,9 @@ services:
     entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull gemma2:9b && wait"]
 
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: cuda-app-transcritor
     depends_on:
       - postgres
@@ -39,6 +41,7 @@ services:
     ports:
       - "8501:8501"
     restart: unless-stopped
+
 volumes:
   postgres_data:
   ollama_data:

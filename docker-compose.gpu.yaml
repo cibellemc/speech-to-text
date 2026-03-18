@@ -11,6 +11,9 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
 
   app:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
     deploy:
       resources:
         reservations:
