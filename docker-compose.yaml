@@ -21,7 +21,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
-    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull gemma2:9b && wait"]
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama list | grep -q 'gemma2:9b' || ollama pull gemma2:9b && wait"]
 
   app:
     build:
