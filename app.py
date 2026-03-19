@@ -8,14 +8,19 @@ from datetime import datetime
 from views.login import login
 from auth import authenticated_only
 from transcriber import convert_to_wav, transcribe
-from views.select import fetch_transcription_by_file_name, save_transcription_to_db, save_minutes_to_db
+from views.select import (
+    fetch_transcription_by_file_name, 
+    save_transcription_to_db, 
+    save_minutes_to_db,
+    generate_minutes_docx,
+    generate_transcription_docx,
+    display_unified_history
+)
 
 def _style_sidebar():
     st.markdown("""
         <style>
-            [data-testid="stSidebarNav"] {
-                padding-top: 1rem;
-            }
+            [data-testid="stSidebarNav"] { padding-top: 1rem; }
             .sidebar-card {
                 background-color: #1E1E1E;
                 padding: 1rem;
@@ -23,57 +28,72 @@ def _style_sidebar():
                 margin-top: 2rem;
                 border: 1px solid #333;
             }
-            .sidebar-card h3 {
-                color: #FFF;
-                font-size: 1rem;
-                margin-bottom: 0.5rem;
-            }
-            .sidebar-card p {
-                color: #888;
-                font-size: 0.85rem;
-                line-height: 1.2;
-            }
+            .sidebar-card h3 { color: #FFF; font-size: 1rem; margin-bottom: 0.5rem; }
+            .sidebar-card p { color: #888; font-size: 0.85rem; line-height: 1.2; }
         </style>
     """, unsafe_allow_html=True)
 
 def generate_summary(text_content):
+    """Gera a ata via Ollama. Levanta Exception em caso de erro para evitar salvamento indevido."""
     try:
         ollama_host = os.getenv('OLLAMA_HOST', 'http://ollama-server:11434')
         ollama_timeout = int(os.getenv('OLLAMA_TIMEOUT', '600'))
         
         prompt = f"""
-        Com base na transcrição abaixo, redija uma ATA formal em português brasileiro, seguindo estas regras: 
-        - Use apenas informações presentes na transcrição.  
-        - Seja extremamente conciso.  
-        - Linguagem formal, sem opiniões ou interpretações.  
-        - Se algum campo não for mencionado na transcrição, omita-o.
+        Transcrição da reunião (use APENAS este texto abaixo para gerar a ata — não copie nem inclua este texto na resposta final):
 
-        ---
-        **Data**: [omitir]  
-        **Local**: [omitir]  
-
-        **Presentes**:  
-        - [omitir]  
-
-        **Pauta**:  
-        1. [Item 1 discutido]  
-           [..]   
-
-        2. [Item 2 discutido]  
-           [...]  
-
-        **Encerramento**:  
-        - [Próximos passos ou reunião agendada] 
-        ---
-
-        **Transcrição**:  
         {text_content}
+
+        Você é um assistente que transcreve e organiza atas de reuniões de forma extremamente fiel e honesta.
+
+        Crie a ATA DE REUNIÃO seguindo RIGOROSAMENTE este modelo e esta ordem exata. 
+
+        REGRAS OBRIGATÓRIAS:
+        - NUNCA invente, suponha, deduza ou complete informações que não estejam explícitas na transcrição.
+        - Se não houver informação clara sobre algum ponto → use exatamente: [omitir]
+        - Seja seco, objetivo e use linguagem formal administrativa em português brasileiro.
+        - Não adicione frases de enfeite, introdução, conclusão ou comentários.
+
+        Formato exato (copie exatamente, inclusive os traços e espaços):
+
+        ATA DE REUNIÃO
+
+        Nº da Ata:          ____________________
+        Data:               ____________________
+        Participantes:      ____________________
+        Responsável pela reunião: ____________________
+        Hora início:        ____________________
+        Hora fim:           ____________________
+
+        Pauta da reunião:   ____________________
+        
+        Tópicos discutidos:
+        • [resumo muito objetivo do que foi efetivamente falado – 1 linha por tópico principal]
+        • [omitir] quando não for possível identificar com clareza
+
+        Decisões tomadas durante a reunião:
+        • [apenas o que foi dito explicitamente como decidido]
+        • [omitir] se não houver decisão clara registrada
+
+        Ações a realizar e etapas seguintes:
+        • [Ação descrita] – Responsável: [nome/persona exata dita ou [omitir]] – Prazo: [prazo dito ou [omitir]]
+        • [omitir] quando não houver ação clara com responsável e/ou prazo
+
+        Agora processe APENAS o conteúdo da transcrição acima e preencha SOMENTE os campos:
+        - Pauta da reunião
+        - Tópicos discutidos
+        - Decisões tomadas durante a reunião
+        - Ações a realizar e etapas seguintes
+
+        Deixe todos os campos do cabeçalho exatamente como estão (com ____________________).
+
+        Responda SOMENTE com a ata formatada, sem nenhuma frase antes ou depois.
         """
 
         response = requests.post(
             f'{ollama_host}/api/generate',
             json={
-                "model": "gemma2:9b",
+                "model": "gemma2:9b", # Se o erro 500 persistir, considere mudar para llama3.2:3b
                 "prompt": prompt,
                 "stream": False,
                 "options": { "temperature": 0.2 } 
@@ -82,15 +102,19 @@ def generate_summary(text_content):
         )
 
         if response.status_code == 200:
-            return response.json().get('response', "Resposta vazia do Ollama.")
+            summary = response.json().get('response', "").strip()
+            if not summary:
+                raise Exception("A IA retornou uma resposta vazia.")
+            return summary
         else:
-            return f"Erro na API: {response.status_code} - {response.text}"
+            raise Exception(f"Erro na API Ollama ({response.status_code}): {response.text}")
 
     except Exception as e:
-        return f"Erro ao gerar ata: {str(e)}"
+        raise Exception(f"Falha na comunicação com a IA: {str(e)}")
 
 def process_audio(input_file, whisper_model, is_automatic):
     user_id = st.session_state.get("user_id")
+    wav_path = None
     try:
         wav_path = convert_to_wav(input_file)
         start_time = time.time()
@@ -105,44 +129,47 @@ def process_audio(input_file, whisper_model, is_automatic):
 
             text_content = "\n".join([f"{s['speaker']}: {s['text']}" for s in segments])
             execution_time = time.time() - start_time
-            
             date_str = datetime.today().strftime('%d-%m-%y')
             t_file_name = f"transcricao_{input_file.name}_{date_str}.docx"
             
+            # Salva a transcrição (sempre salva se chegar aqui)
             t_id = save_transcription_to_db(user_id, input_file.name, t_file_name, text_content, whisper_model, execution_time)
             
             if is_automatic:
                 with st.spinner("Gerando Ata Automática..."):
-                    summary = generate_summary(text_content)
-                    m_file_name = f"ata_{input_file.name}_{date_str}.docx"
-                    save_minutes_to_db(user_id, t_id, m_file_name, summary, "gemma2:9b", "automatic")
-                    
-                    st.success("Processamento concluído!")
-                    st.markdown("### Ata Gerada:")
-                    st.write(summary)
-                    
-                    from views.select import generate_minutes_docx
-                    docx_bio = generate_minutes_docx(input_file.name, summary)
-                    st.download_button("Baixar Ata Final", docx_bio, m_file_name)
+                    try:
+                        summary = generate_summary(text_content)
+                        m_file_name = f"ata_{input_file.name}_{date_str}.docx"
+                        
+                        # SÓ SALVA A ATA NO DB SE A IA NÃO DER ERRO
+                        save_minutes_to_db(user_id, t_id, m_file_name, summary, "gemma2:9b", "automatic")
+                        
+                        st.success("Processamento completo!")
+                        st.markdown("### Ata Gerada:")
+                        st.write(summary)
+                        
+                        docx_bio = generate_minutes_docx(input_file.name, summary)
+                        st.download_button("Baixar Ata Final", docx_bio, m_file_name)
+                    except Exception as ai_error:
+                        st.error(f"Transcrição concluída, mas a Ata falhou: {ai_error}")
+                        st.info("Você pode baixar a transcrição abaixo ou tentar gerar a ata no menu 'Apenas Ata'.")
+                        docx_trans = generate_transcription_docx(segments, t_file_name)
+                        st.download_button("Baixar Transcrição", docx_trans, t_file_name)
             else:
-                from views.select import generate_transcription_docx
                 docx_bio = generate_transcription_docx(segments, t_file_name)
                 st.success("Transcrição concluída!")
                 st.download_button("Baixar Transcrição para Edição", docx_bio, t_file_name)
 
-        if os.path.exists(wav_path):
-            os.unlink(wav_path)
-            
     except Exception as e:
-        st.error(f"Erro no processamento: {e}")
+        st.error(f"Erro crítico no processamento: {e}")
+    finally:
+        if wav_path and os.path.exists(wav_path):
+            os.unlink(wav_path)
 
 @authenticated_only
 def transcription_plus_ata_view():
     st.title("Transcrição + Ata")
-    
-    # Estado para controle
-    if "run_auto" not in st.session_state:
-        st.session_state.run_auto = False
+    if "run_auto" not in st.session_state: st.session_state.run_auto = False
 
     with st.form("auto_form"):
         file = st.file_uploader("Upload de áudio/vídeo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
@@ -152,48 +179,35 @@ def transcription_plus_ata_view():
                 st.session_state.run_auto = True
                 st.session_state.temp_file = file
                 st.session_state.temp_model = model
-            else:
-                st.error("Selecione um arquivo.")
+            else: st.error("Selecione um arquivo.")
 
-    # Executa fora do formulário
     if st.session_state.run_auto:
         process_audio(st.session_state.temp_file, st.session_state.temp_model, True)
-        st.session_state.run_auto = False # Reseta para a próxima execução
+        st.session_state.run_auto = False
 
 @authenticated_only
 def transcription_only_view():
     st.title("Apenas Transcrição")
-    st.markdown("Gera só a transcrição")
-    
-    # Criamos variáveis para persistir o estado fora do form
-    if "processar" not in st.session_state:
-        st.session_state.processar = False
+    if "run_trans" not in st.session_state: st.session_state.run_trans = False
 
     with st.form("trans_form"):
         file = st.file_uploader("Upload de áudio/vídeo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
         model = st.selectbox("Modelo Whisper", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
-        submit = st.form_submit_button("Gerar Transcrição", use_container_width=True)
-        
-        if submit:
+        if st.form_submit_button("Gerar Transcrição", use_container_width=True):
             if file:
-                st.session_state.processar = True
+                st.session_state.run_trans = True
                 st.session_state.temp_file = file
                 st.session_state.temp_model = model
-            else:
-                st.error("Selecione um arquivo.")
+            else: st.error("Selecione um arquivo.")
 
-    # PROCESSAMENTO FORA DO FORM
-    if st.session_state.processar:
+    if st.session_state.run_trans:
         process_audio(st.session_state.temp_file, st.session_state.temp_model, False)
-        # Limpamos o estado para não reprocessar no próximo refresh
-        st.session_state.processar = False
+        st.session_state.run_trans = False
 
 @authenticated_only
 def ata_only_view():
     st.title("Apenas Ata")
-    
-    if "run_ata_only" not in st.session_state:
-        st.session_state.run_ata_only = False
+    if "run_ata_only" not in st.session_state: st.session_state.run_ata_only = False
 
     with st.form("ata_form"):
         file = st.file_uploader("Upload de arquivo (.docx ou .txt)", type=["docx", "txt"])
@@ -201,14 +215,11 @@ def ata_only_view():
             if file:
                 st.session_state.run_ata_only = True
                 st.session_state.temp_ata_file = file
-            else:
-                st.error("Selecione um arquivo.")
+            else: st.error("Selecione um arquivo.")
 
-    # Executa fora do formulário
     if st.session_state.run_ata_only:
         file = st.session_state.temp_ata_file
         try:
-            content = ""
             if file.name.endswith(".docx"):
                 doc = docx.Document(file)
                 content = "\n".join([p.text for p in doc.paragraphs])
@@ -217,16 +228,21 @@ def ata_only_view():
             
             with st.spinner("Gerando Ata..."):
                 summary = generate_summary(content)
-                st.success("Ata gerada!")
-                st.write(summary)
+                m_file_name = f"ata_{file.name}.docx"
                 
-                from views.select import generate_minutes_docx
-                # Agora o botão de download vai funcionar!
-                st.download_button(
-                    label="Baixar Ata", 
-                    data=generate_minutes_docx(file.name, summary), 
-                    file_name=f"ata_{file.name}.docx"
+                # Salva no banco de dados para aparecer no histórico
+                save_minutes_to_db(
+                    st.session_state.get("user_id"), 
+                    None, 
+                    m_file_name, 
+                    summary, 
+                    "gemma2:9b", 
+                    "manual"
                 )
+                
+                st.success("Ata gerada e salva no histórico!")
+                st.write(summary)
+                st.download_button("Baixar Ata", generate_minutes_docx(file.name, summary), m_file_name)
         except Exception as e:
             st.error(f"Erro: {e}")
         finally:
@@ -234,16 +250,13 @@ def ata_only_view():
 
 @authenticated_only
 def history_view():
-    user_id = st.session_state.get("user_id")
-    from views.select import display_unified_history
-    display_unified_history(user_id)
+    display_unified_history(st.session_state.get("user_id"))
 
 def main():
     if "authenticated" not in st.session_state or not st.session_state.authenticated:
         login()
     else:
         _style_sidebar()
-        
         with st.sidebar:
             st.title(f"Olá, {st.session_state.username}")
             if st.button("Sair", use_container_width=True):
@@ -253,24 +266,13 @@ def main():
 
         pages = {
             "MENU PRINCIPAL": [
-                st.Page(transcription_plus_ata_view, title="Transcrição + Ata", icon=":material/description:", url_path="transcricao_e_ata"),
-                st.Page(transcription_only_view, title="Apenas Transcrição", icon=":material/mic:", url_path="transcricao"),
-                st.Page(ata_only_view, title="Apenas Ata", icon=":material/upload:", url_path="ata"),
-                st.Page(history_view, title="Histórico", icon=":material/history:", url_path="historico"),
+                st.Page(transcription_plus_ata_view, title="Transcrição + Ata", icon=":material/description:"),
+                st.Page(transcription_only_view, title="Apenas Transcrição", icon=":material/mic:"),
+                st.Page(ata_only_view, title="Apenas Ata", icon=":material/upload:"),
+                st.Page(history_view, title="Histórico", icon=":material/history:"),
             ]
         }
-
-        pg = st.navigation(pages)
-        
-        with st.sidebar:
-            st.markdown("""
-                <div class="sidebar-card">
-                    <h3>Como funciona?</h3>
-                    <p>Escolha entre gerar transcrição + ata, apenas transcrição, ou apenas ata a partir de uma transcrição editada.</p>
-                </div>
-            """, unsafe_allow_html=True)
-
-        pg.run()
+        st.navigation(pages).run()
 
 if __name__ == "__main__":
     main()

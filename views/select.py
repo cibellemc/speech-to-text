@@ -5,7 +5,7 @@ from services.database import conn
 import pandas as pd
 import io
 import docx
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- DATABASE OPERATIONS ---
 
@@ -73,7 +73,7 @@ def fetch_unified_history(user_id, limit=10, offset=0, search_term=""):
     params = {"user_id": user_id, "limit": limit, "offset": offset}
     
     if search_term:
-        search_filter = "AND (audio_name ILIKE :search OR transcription_file_name ILIKE :search OR CAST(created_at AS TEXT) ILIKE :search)"
+        search_filter = "AND (audio_name ILIKE :search OR transcription_file_name ILIKE :search OR CAST(created_at - INTERVAL '3 hours' AS TEXT) ILIKE :search)"
         params["search"] = f"%{search_term}%"
 
     query = text(f"""
@@ -214,7 +214,9 @@ def _render_summary_cards(counts):
 
 def _render_history_item(item, user_id):
     name = item.audio_name if item.audio_name else item.minute_file_name
-    date = item.created_at.strftime("%d %b %Y, %H:%M")
+    # Ajuste para horário local (UTC-3)
+    local_time = item.created_at - timedelta(hours=3)
+    date = local_time.strftime("%d %b %Y, %H:%M")
     entry_type = item.entry_type
     model = item.model if item.model else "Híbrido"
     has_trans = bool(item.transcription)
@@ -328,8 +330,6 @@ def _show_details_dialog(transcription, minute_content):
 
 @authenticated_only
 def display_unified_history(user_id):
-    # Limpa flag do dialog ao entrar na página
-    st.session_state.pop("open_dialog", None)
     # Limpa bytes cacheados também (opcional, mas evita memory leak)
     keys_to_remove = [k for k in st.session_state if k.startswith("bytes_trans_") or k.startswith("bytes_min_")]
     for k in keys_to_remove:
