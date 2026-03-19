@@ -349,17 +349,20 @@ def display_unified_history(user_id):
     """, unsafe_allow_html=True)
 
     st.markdown('<div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;"><h1 style="margin:0;">Histórico</h1></div>', unsafe_allow_html=True)
-    st.markdown('<p style="color:#888;margin-bottom:2rem;">Visualize e baixe suas transcrições e atas anteriores.</p>', unsafe_allow_html=True)
+    # st.markdown('<p style="color:#888;margin-bottom:2rem;">Visualize e baixe suas transcrições e atas anteriores.</p>', unsafe_allow_html=True)
 
     counts = fetch_history_counts(user_id)
     _render_summary_cards(counts)
 
-    st.markdown('<h2 style="margin-top:3rem;margin-bottom:1rem;">Arquivos Recentes</h2>', unsafe_allow_html=True)
+    st.divider()
+
+    st.markdown('<h2 style="margin-bottom:1rem;">Arquivos Recentes</h2>', unsafe_allow_html=True)
+
 
     if "hist_page" not in st.session_state:
         st.session_state.hist_page = 0
 
-    search_term = st.text_input("Buscar por nome de arquivo ou data", placeholder="Digite para filtrar...")
+    search_term = st.text_input("Buscar por nome de arquivo ou data (DD-MM-AAAA)", placeholder="Digite para filtrar")
 
     limit = 10
     offset = st.session_state.hist_page * limit

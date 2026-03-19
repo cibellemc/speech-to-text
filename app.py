@@ -168,12 +168,27 @@ def process_audio(input_file, whisper_model, is_automatic):
 
 @authenticated_only
 def transcription_plus_ata_view():
-    st.title("Transcrição + Ata")
+    st.title("Realize Transcrição com Ata")
+    
+    st.markdown(
+        "Clique em `Browse files` para buscar no computador o vídeo ou áudio desejado. Você também tem a opção de arrastar e soltar o arquivo para a área de upload."
+    )
+
+    st.markdown(
+        "Dois arquivos serão gerados: a transcrição e a ata."
+    )
+
+    st.markdown(
+        "Os modelos de transcrição vão do ``tiny`` ao ``large``. Quanto maior a precisão/confiabilidade (mais próximo de ``large``), mais tempo será necessário para processar sua solicitação. O modelo ``turbo`` é o mais rápido e preciso."
+    )
+
+    st.markdown("A ata será gerada em modelo padrão, com campos para preenchimento manual. O modelo de IA usado é o ``gemma2:9b``.")
+    
     if "run_auto" not in st.session_state: st.session_state.run_auto = False
 
     with st.form("auto_form"):
         file = st.file_uploader("Upload de áudio/vídeo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
-        model = st.selectbox("Modelo Whisper", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
+        model = st.selectbox("Modelo de transcrição", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
         if st.form_submit_button("Iniciar", use_container_width=True):
             if file:
                 st.session_state.run_auto = True
@@ -187,12 +202,20 @@ def transcription_plus_ata_view():
 
 @authenticated_only
 def transcription_only_view():
-    st.title("Apenas Transcrição")
+    st.title("Gere apenas Transcrição")
+    st.markdown("""
+        Clique em `Browse files` para buscar no computador o áudio desejado. 
+        Você também tem a opção de arrastar e soltar o arquivo para a área de upload.
+
+        Os modelos de transcrição vão do ``tiny`` ao ``turbo``. 
+        Quanto maior a precisão/confiabilidade (mais próximo de turbo/large), mais tempo será necessário para processar sua solicitação.
+    """)
+    
     if "run_trans" not in st.session_state: st.session_state.run_trans = False
 
     with st.form("trans_form"):
         file = st.file_uploader("Upload de áudio/vídeo", type=["mp4", "m4a", "mp3", "mkv", "wav"])
-        model = st.selectbox("Modelo Whisper", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
+        model = st.selectbox("Modelo de transcrição", options=["tiny", "base", "small", "medium", "large", "turbo"], index=5)
         if st.form_submit_button("Gerar Transcrição", use_container_width=True):
             if file:
                 st.session_state.run_trans = True
@@ -206,7 +229,12 @@ def transcription_only_view():
 
 @authenticated_only
 def ata_only_view():
-    st.title("Apenas Ata")
+    st.title("Gere apenas Ata")
+    st.markdown("""
+        Clique em `Browse files` para carregar um arquivo de transcrição (**.docx** ou **.txt**).
+        A IA irá processar o conteúdo e gerar uma ata formatada.
+    """)
+    
     if "run_ata_only" not in st.session_state: st.session_state.run_ata_only = False
 
     with st.form("ata_form"):
@@ -262,7 +290,7 @@ def main():
             if st.button("Sair", use_container_width=True):
                 st.session_state.authenticated = False
                 st.rerun()
-            st.divider()
+            # st.divider()
 
         pages = {
             "MENU PRINCIPAL": [

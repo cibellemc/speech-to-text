@@ -1,55 +1,57 @@
-<h1 align="center"> Dashboard para transcrição de áudio </h1>
+<h1 align="center"> Dashboard para Transcrição e Geração de Atas </h1>
 
-<!-- pasta para o git conseguir acessar a foto -->
 <p align="center">
-  <img alt="Imagem da tela base do dashboard de transcrição de áudios" src="assets/dashboard-transcricao.png" width="100%">
+  <img alt="Imagem da tela base do dashboard" src="assets/dashboard-transcricao.png" width="100%">
 </p>
 
-## 🎯 Projetos base
-- https://github.com/jojojaeger/whisper-streamlit
-- https://medium.com/@xriteshsharmax/speaker-diarization-using-whisper-asr-and-pyannote-f0141c85d59a
+## 🎯 Sobre o Projeto
+Este dashboard é uma solução completa para transcrição de reuniões, geração automatizada de atas usando IA e gerenciamento de histórico. Ele utiliza modelos de última geração para garantir precisão e facilidade no dia a dia administrativo.
 
-  
+## ✨ Funcionalidades
+- **Transcrição de Áudio/Vídeo**: Suporte a diversos formatos (mp4, m4a, mp3, mkv, wav) com identificação de falantes (Diarização).
+- **Geração de Atas (AI)**: Criação automática de atas estruturadas a partir das transcrições usando modelos como Gemma2 (via Ollama).
+- **Histórico Unificado**: Visualize, busque e baixe transcrições e atas geradas anteriormente em formato DOCX.
+- **Diarização**: Identificação automática de quem está falando ("Speaker 0", "Speaker 1").
+
 ## 🚀 Tecnologias
-- Streamlit: framework open source usado para transformar scripts Pyhton em aplicações web. 
-- [Whisper - OpenAI](https://github.com/openai/whisper): modelo de reconhecimento automático de fala desenvolvido pela OpenAI. Processa áudio e gera saída de texto. 
-- [AgglomerativeClustering](https://scikit-learn.org/dev/modules/generated/sklearn.cluster.AgglomerativeClustering.html): algoritmo de aprendizado não supervisionado, utilizado aqui para a identificação e separação de diferentes vozes em um áudio. 
+- **[Streamlit](https://streamlit.io/)**: Interface web interativa.
+- **[Whisper (OpenAI)](https://github.com/openai/whisper)**: Modelo de reconhecimento de fala de alta precisão.
+- **[Pyannote.audio](https://github.com/pyannote/pyannote-audio)**: Diarização de falantes.
+- **[Ollama](https://ollama.com/)**: Orquestração de LLMs locais (Gemma2) para resumo e geração de atas.
+- **[PostgreSQL](https://www.postgresql.org/)**: Armazenamento persistente de transcrições e histórico.
+- **[SQLAlchemy](https://www.sqlalchemy.org/)**: ORM para comunicação com o banco de dados.
 
-## ▶️ Fluxograma de funcionamento do sistema
-- [Desenho do algoritmo](https://www.mermaidchart.com/raw/e361f51c-36c1-4215-ae15-dea2c0fba48a?theme=light&version=v0.1&format=svg)
-  
-# Configurações do ambiente de desenvolvimento
-1. Clone o projeto.
-```
-git clone git@github.com:cibellemc/speech-to-text.git
-```
+## 🛠️ Configuração do Ambiente
 
-2. Entre na pasta do projeto
-```
-cd/speech-to-text
-```
+1. **Clone o repositório**:
+   ```bash
+   git clone git@github.com:cibellemc/speech-to-text.git
+   cd speech-to-text
+   ```
 
-3. Suba os containers (o build da imagem será feito automaticamente)
+2. **Configuração de Variáveis de Ambiente**:
+   Crie um arquivo `.env` na raiz do projeto com:
+   ```env
+   HF_TOKEN=seu_token_huggingface_aqui
+   OLLAMA_HOST=http://ollama-server:11434
+   ```
+   *Nota: O `HF_TOKEN` é necessário para baixar os modelos de diarização do Pyannote.*
 
-Se você **não possui** uma placa de vídeo dedicada (apenas CPU):
-```bash
-sudo docker compose up -d --build
-```
+3. **Suba os containers (Docker)**:
 
-Se você **possui** uma placa de vídeo NVIDIA e já configurou o [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html):
-```bash
-sudo docker compose -f docker-compose.yaml -f docker-compose.gpu.yaml up -d --build
-```
+   **Apenas CPU**:
+   ```bash
+   docker compose up -d --build
+   ```
 
-Caso queira mudar configurações de portas, nome de banco de dados ou senha, ou nome dos containers, edite os arquivos `.streamlit/secrets.toml` e `docker-compose.yaml`.
+   **Com GPU NVIDIA**:
+   *(Necessário NVIDIA Container Toolkit instalado)*
+   ```bash
+   docker compose -f docker-compose.yaml -f docker-compose.gpu.yaml up -d --build
+   ```
 
-## 🌐 Acesso à aplicação
-No terminal em que você subiu o docker-compose aparecerá o link de acesso
-```
-# exemplo 
-teste-docker-app-1       |   You can now view your Streamlit app in your browser.
-teste-docker-app-1       | 
-teste-docker-app-1       |   Local URL: http://0.0.0.0:8501
-```
+## 🌐 Acesso
+A aplicação estará disponível em `http://localhost:8501`.
 
-Você pode acessar localmente (127.0.0.1:8501), dentro da rede ou externamente (consultar seus ips e manter a porta 8501)
+## 📜 Licença
+Distribuído sob a licença MIT. Veja `LICENSE` para mais informações.
