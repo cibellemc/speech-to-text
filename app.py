@@ -93,7 +93,7 @@ def generate_summary(text_content):
         response = requests.post(
             f'{ollama_host}/api/generate',
             json={
-                "model": "gemma2:9b", # Se o erro 500 persistir, considere mudar para llama3.2:3b
+                "model": "llama3.2:latest", # Se o erro 500 persistir, considere mudar para llama3.2:3b
                 "prompt": prompt,
                 "stream": False,
                 "options": { "temperature": 0.2 } 
@@ -142,7 +142,7 @@ def process_audio(input_file, whisper_model, is_automatic):
                         m_file_name = f"ata_{input_file.name}_{date_str}.docx"
                         
                         # SÓ SALVA A ATA NO DB SE A IA NÃO DER ERRO
-                        save_minutes_to_db(user_id, t_id, m_file_name, summary, "gemma2:9b", "automatic")
+                        save_minutes_to_db(user_id, t_id, m_file_name, summary, "llama3.2", "automatic")
                         
                         st.success("Processamento completo!")
                         st.markdown("### Ata Gerada:")
@@ -182,7 +182,7 @@ def transcription_plus_ata_view():
         "Os modelos de transcrição vão do ``tiny`` ao ``large``. Quanto maior a precisão/confiabilidade (mais próximo de ``large``), mais tempo será necessário para processar sua solicitação. O modelo ``turbo`` é o mais rápido e preciso."
     )
 
-    st.markdown("A ata será gerada em modelo padrão, com campos para preenchimento manual. O modelo de IA usado é o ``gemma2:9b``.")
+    st.markdown("A ata será gerada em modelo padrão, com campos para preenchimento manual. O modelo de IA usado é o ``llama3.2``.")
     
     if "run_auto" not in st.session_state: st.session_state.run_auto = False
 
@@ -264,7 +264,7 @@ def ata_only_view():
                     None, 
                     m_file_name, 
                     summary, 
-                    "gemma2:9b", 
+                    "llama3.2", 
                     "manual"
                 )
                 
