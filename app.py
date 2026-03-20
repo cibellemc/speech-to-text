@@ -37,7 +37,7 @@ def generate_summary(text_content):
     """Gera a ata via Ollama. Levanta Exception em caso de erro para evitar salvamento indevido."""
     try:
         ollama_host = os.getenv('OLLAMA_HOST', 'http://ollama-server:11434')
-        ollama_timeout = int(os.getenv('OLLAMA_TIMEOUT', '600'))
+        ollama_timeout = int(os.getenv('OLLAMA_TIMEOUT', '900'))
         
         prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 You are a professional corporate secretary. Your sole task is to generate formal meeting minutes (ATA DE REUNIÃO) based ONLY on the provided transcript. 
@@ -88,7 +88,8 @@ Generate the ATA based on the rules above. Remember: ONLY the formatted ATA in P
                 "options": {
                     "temperature": 0,
                     "top_p": 0.9,
-                    "repeat_penalty": 1.5,
+                    "repeat_penalty": 1.1,
+                    "num_ctx": 32768,
                     "stop": ["<|eot_id|>", "TRANSCRIPTION", "User:"]
                 }
             },
