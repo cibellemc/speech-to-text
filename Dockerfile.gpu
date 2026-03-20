@@ -51,9 +51,5 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 WORKDIR /app
 COPY . .
 
-# Não remova o torchcodec - ele é necessário!
-# Em vez disso, configuramos variáveis de ambiente para o pyannote
-ENV PYANNOTE_AUDIO_DECODER=torchaudio
-
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
 

@@ -75,8 +75,8 @@ def transcribe(audio_path, whisper_model_name, hf_token):
             audio_segment = Segment(segment["start"], segment["end"])
             speakers_in_segment = []
             
-            # Ajuste crucial: iterar sobre .speaker_diarization (retorna turn, speaker)
-            for turn, speaker in diarization_output.speaker_diarization:
+            # Itera sobre a diarização (API correta do pyannote.audio 3.3.x)
+            for turn, _, speaker in diarization_output.itertracks(yield_label=True):
                 intersection = audio_segment & turn
                 if intersection:
                     speakers_in_segment.append((speaker, intersection.duration))
