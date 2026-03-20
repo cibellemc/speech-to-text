@@ -39,19 +39,17 @@ def generate_summary(text_content):
         ollama_host = os.getenv('OLLAMA_HOST', 'http://ollama-server:11434')
         ollama_timeout = int(os.getenv('OLLAMA_TIMEOUT', '600'))
         
-        prompt = f"""[INST] Você é um redator oficial de atas de reunião corporativas. Sua tarefa é gerar uma ata formal, concisa e bem estruturada em português brasileiro.
+        prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are a professional corporate secretary. Your sole task is to generate formal meeting minutes (ATA DE REUNIÃO) based ONLY on the provided transcript. 
 
-REGRAS ABSOLUTAS — violá-las é proibido:
-1. Use EXCLUSIVAMENTE as informações presentes na transcrição abaixo. Não invente, não suponha, não deduza.
-2. Não parafraseie nem repita a mesma ideia com palavras diferentes.
-3. Cada tópico, decisão ou ação deve aparecer UMA ÚNICA VEZ.
-4. Use linguagem formal administrativa. Proibido linguagem coloquial, gírias ou tom informal.
-5. Seja extremamente conciso: máximo 5 tópicos discutidos, máximo 5 decisões, máximo 5 ações.
-6. Se uma informação não estiver explícita na transcrição, escreva exatamente: [omitir]
-7. Responda SOMENTE com a ata. Sem introdução, sem explicação, sem comentários.
+STRICT GUIDELINES:
+1. OUTPUT LANGUAGE: Always write the content in formal Portuguese (pt-BR).
+2. NO CHATTER: Do not include ANY introductory text (e.g., "Aqui está o resumo") or concluding remarks. Start immediately with "ATA DE REUNIÃO".
+3. HEADER INTEGRITY: Maintain all underscores (___________) in the header fields exactly as they are in the template. Do not fill them unless info is explicit.
+4. MISSING INFO: For any required field where information is not present in the transcript, use exactly "[omitir]".
+5. TONE: Strictly professional and administrative. No bullet points without content.
 
-FORMATO OBRIGATÓRIO — copie exatamente esta estrutura:
-
+EXAMPLE OF CORRECT OUTPUT:
 ATA DE REUNIÃO
 
 Nº da Ata:               ____________________
@@ -61,23 +59,25 @@ Responsável pela reunião:____________________
 Hora início:             ____________________
 Hora fim:                ____________________
 
-Pauta da reunião: [tema central da reunião em até 1 linha]
+Pauta da reunião: Reunião diária de alinhamento técnico da equipe de TI.
 
 Tópicos discutidos:
-• [assunto 1 — máximo 1 frase objetiva]
-• [assunto 2 — máximo 1 frase objetiva]
+• Discussão sobre a compra de SSDs externos de 480GB.
+• Definição da entrega das webcams para os usuários Claron e Rafael.
 
 Decisões tomadas:
-• [decisão 1 — apenas o que foi explicitamente decidido]
-• [omitir] se nenhuma decisão foi registrada
+• Aprovada a reposição imediata de teclados e microfones de qualidade superior.
 
 Ações e responsáveis:
-• [ação] — Responsável: [nome ou omitir] — Prazo: [prazo ou omitir]
-• [omitir] se nenhuma ação foi registrada
+• Cotagem de preços de SSDs — Responsável: Rafael — Prazo: [omitir]
 
-TRANSCRIÇÃO DA REUNIÃO:
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+TRANSCRIPTION TO PROCESS:
 {text_content}
-[/INST]"""
+
+Generate the ATA based on the rules above. Remember: ONLY the formatted ATA in Portuguese.
+<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+"""
 
         response = requests.post(
             f'{ollama_host}/api/generate',
@@ -88,7 +88,8 @@ TRANSCRIÇÃO DA REUNIÃO:
                 "options": {
                     "temperature": 0,
                     "top_p": 0.9,
-                    "repeat_penalty": 1.3
+                    "repeat_penalty": 1.5,
+                    "stop": ["<|eot_id|>", "TRANSCRIPTION", "User:"]
                 }
             },
             timeout=ollama_timeout
