@@ -213,7 +213,8 @@ def _render_summary_cards(counts):
 
 
 def _render_history_item(item, user_id):
-    name = item.audio_name if item.audio_name else item.minute_file_name
+    # Fallback para registros antigos que não tem audio_name ou para atas sem transcrição vinculada
+    name = item.audio_name or item.minute_file_name or item.transcription_file_name or "Arquivo sem nome"
     # Ajuste para horário local (UTC-3)
     local_time = item.created_at - timedelta(hours=3)
     date = local_time.strftime("%d %b %Y, %H:%M")

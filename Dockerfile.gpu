@@ -1,31 +1,59 @@
+# ─────────────────────────────────────────
+# Stage 1: Builder
+# ─────────────────────────────────────────
+FROM nvidia/cuda:12.8.1-devel-ubuntu22.04 AS builder
 
-FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
- 
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    python3 python3-pip \
-    ffmpeg \
-    build-essential \
-    libsndfile1 \
-    portaudio19-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
- 
-RUN ln -sf /usr/bin/python3 /usr/bin/python && \
-    [ -f /usr/bin/pip ] || ln -s /usr/bin/pip3 /usr/bin/pip
- 
-RUN pip install --upgrade pip
- 
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
- 
-WORKDIR /app
- 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip uninstall -y torchvision
+        python3 python3-pip python3-dev \
+        build-essential libsndfile1-dev ffmpeg && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
+RUN ln -sf /usr/bin/python3 /usr/bin/python && pip install --upgrade pip
+
+COPY requirements.txt .
+
+# Instala o torch com CUDA 12.4
+RUN pip install --no-cache-dir \
+    "numpy<2" \
+    torch==2.4.1 \
+    torchaudio==2.4.1 \
+    --index-url https://download.pytorch.org/whl/cu124
+
+# Instala o torchcodec da versão correta
+RUN pip install --no-cache-dir torchcodec==0.2.0
+
+# Instala os requirements principais
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ─────────────────────────────────────────
+# Stage 2: Runtime
+# ─────────────────────────────────────────
+FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 python3-pip ffmpeg libsndfile1 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+# Copia as bibliotecas instaladas no builder
+COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+WORKDIR /app
 COPY . .
-RUN find . -type d -name "__pycache__" -exec rm -rf {} +
- 
+
+# Não remova o torchcodec - ele é necessário!
+# Em vez disso, configuramos variáveis de ambiente para o pyannote
+ENV PYANNOTE_AUDIO_DECODER=torchaudio
+
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
- 
+
