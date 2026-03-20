@@ -25,3 +25,5 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - DATABASE_URL=postgresql://postgres:12345678@cuda-db-transcritor:5432/transcritor
       - OLLAMA_HOST=http://ollama-server:11434
+      - HF_TOKEN=${HF_TOKEN}
+      - OLLAMA_TIMEOUT=600
