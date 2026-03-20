@@ -37,47 +37,48 @@ def generate_summary(text_content):
     """Gera a ata via Ollama. Levanta Exception em caso de erro para evitar salvamento indevido."""
     try:
         ollama_host = os.getenv('OLLAMA_HOST', 'http://ollama-server:11434')
-        ollama_timeout = int(os.getenv('OLLAMA_TIMEOUT', '900'))
+        ollama_timeout = int(os.getenv('OLLAMA_TIMEOUT', '600'))
         
-        prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-You are a professional corporate secretary. Your sole task is to generate formal meeting minutes (ATA DE REUNIÃO) based ONLY on the provided transcript. 
+        prompt = f"""
+        <|begin_of_text|><|start_header_id|>system<|end_header_id|>
+        You are a professional corporate secretary. Your sole task is to generate formal meeting minutes (ATA DE REUNIÃO) based ONLY on the provided transcript. 
 
-STRICT GUIDELINES:
-1. OUTPUT LANGUAGE: Always write the content in formal Portuguese (pt-BR).
-2. NO CHATTER: Do not include ANY introductory text (e.g., "Aqui está o resumo") or concluding remarks. Start immediately with "ATA DE REUNIÃO".
-3. HEADER INTEGRITY: Maintain all underscores (___________) in the header fields exactly as they are in the template. Do not fill them unless info is explicit.
-4. MISSING INFO: For any required field where information is not present in the transcript, use exactly "[omitir]".
-5. TONE: Strictly professional and administrative. No bullet points without content.
+        STRICT GUIDELINES:
+        1. OUTPUT LANGUAGE: Always write the content in formal Portuguese (pt-BR).
+        2. NO CHATTER: Do not include ANY introductory text (e.g., "Aqui está o resumo") or concluding remarks. Start immediately with "ATA DE REUNIÃO".
+        3. HEADER INTEGRITY: Maintain all underscores (___________) in the header fields exactly as they are in the template. Do not fill them unless info is explicit.
+        4. MISSING INFO: For any required field where information is not present in the transcript, use exactly "[omitir]".
+        5. TONE: Strictly professional and administrative. No bullet points without content.
 
-EXAMPLE OF CORRECT OUTPUT:
-ATA DE REUNIÃO
+        EXAMPLE OF CORRECT OUTPUT:
+        ATA DE REUNIÃO
 
-Nº da Ata:               ____________________
-Data:                    ____________________
-Participantes:           ____________________
-Responsável pela reunião:____________________
-Hora início:             ____________________
-Hora fim:                ____________________
+        Nº da Ata:               ____________________
+        Data:                    ____________________
+        Participantes:           ____________________
+        Responsável pela reunião:____________________
+        Hora início:             ____________________
+        Hora fim:                ____________________
 
-Pauta da reunião: Reunião diária de alinhamento técnico da equipe de TI.
+        Pauta da reunião: Reunião diária de alinhamento técnico da equipe de TI.
 
-Tópicos discutidos:
-• Discussão sobre a compra de SSDs externos de 480GB.
-• Definição da entrega das webcams para os usuários Claron e Rafael.
+        Tópicos discutidos:
+        • Discussão sobre a compra de SSDs externos de 480GB.
+        • Definição da entrega das webcams para os usuários Claron e Rafael.
 
-Decisões tomadas:
-• Aprovada a reposição imediata de teclados e microfones de qualidade superior.
+        Decisões tomadas:
+        • Aprovada a reposição imediata de teclados e microfones de qualidade superior.
 
-Ações e responsáveis:
-• Cotagem de preços de SSDs — Responsável: Rafael — Prazo: [omitir]
+        Ações e responsáveis:
+        • Cotagem de preços de SSDs — Responsável: Rafael — Prazo: [omitir]
 
-<|eot_id|><|start_header_id|>user<|end_header_id|>
-TRANSCRIPTION TO PROCESS:
-{text_content}
+        <|eot_id|><|start_header_id|>user<|end_header_id|>
+        TRANSCRIPTION TO PROCESS:
+        {text_content}
 
-Generate the ATA based on the rules above. Remember: ONLY the formatted ATA in Portuguese.
-<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-"""
+        Generate the ATA based on the rules above. Remember: ONLY the formatted ATA in Portuguese.
+        <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+        """
 
         response = requests.post(
             f'{ollama_host}/api/generate',
@@ -87,10 +88,8 @@ Generate the ATA based on the rules above. Remember: ONLY the formatted ATA in P
                 "stream": False,
                 "options": {
                     "temperature": 0,
-                    "top_p": 0.9,
-                    "repeat_penalty": 1.1,
-                    "num_ctx": 32768,
-                    "stop": ["<|eot_id|>", "TRANSCRIPTION", "User:"]
+                    # "top_p": 0.9,
+                    # "repeat_penalty": 1.3
                 }
             },
             timeout=ollama_timeout
