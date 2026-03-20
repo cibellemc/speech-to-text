@@ -39,64 +39,57 @@ def generate_summary(text_content):
         ollama_host = os.getenv('OLLAMA_HOST', 'http://ollama-server:11434')
         ollama_timeout = int(os.getenv('OLLAMA_TIMEOUT', '600'))
         
-        prompt = f"""
-        Transcrição da reunião (use APENAS este texto abaixo para gerar a ata — não copie nem inclua este texto na resposta final):
+        prompt = f"""[INST] Você é um redator oficial de atas de reunião corporativas. Sua tarefa é gerar uma ata formal, concisa e bem estruturada em português brasileiro.
 
-        {text_content}
+REGRAS ABSOLUTAS — violá-las é proibido:
+1. Use EXCLUSIVAMENTE as informações presentes na transcrição abaixo. Não invente, não suponha, não deduza.
+2. Não parafraseie nem repita a mesma ideia com palavras diferentes.
+3. Cada tópico, decisão ou ação deve aparecer UMA ÚNICA VEZ.
+4. Use linguagem formal administrativa. Proibido linguagem coloquial, gírias ou tom informal.
+5. Seja extremamente conciso: máximo 5 tópicos discutidos, máximo 5 decisões, máximo 5 ações.
+6. Se uma informação não estiver explícita na transcrição, escreva exatamente: [omitir]
+7. Responda SOMENTE com a ata. Sem introdução, sem explicação, sem comentários.
 
-        Você é um assistente que transcreve e organiza atas de reuniões de forma extremamente fiel e honesta.
+FORMATO OBRIGATÓRIO — copie exatamente esta estrutura:
 
-        Crie a ATA DE REUNIÃO seguindo RIGOROSAMENTE este modelo e esta ordem exata. 
+ATA DE REUNIÃO
 
-        REGRAS OBRIGATÓRIAS:
-        - NUNCA invente, suponha, deduza ou complete informações que não estejam explícitas na transcrição.
-        - Se não houver informação clara sobre algum ponto → use exatamente: [omitir]
-        - Seja seco, objetivo e use linguagem formal administrativa em português brasileiro.
-        - Não adicione frases de enfeite, introdução, conclusão ou comentários.
+Nº da Ata:               ____________________
+Data:                    ____________________
+Participantes:           ____________________
+Responsável pela reunião:____________________
+Hora início:             ____________________
+Hora fim:                ____________________
 
-        Formato exato (copie exatamente, inclusive os traços e espaços):
+Pauta da reunião: [tema central da reunião em até 1 linha]
 
-        ATA DE REUNIÃO
+Tópicos discutidos:
+• [assunto 1 — máximo 1 frase objetiva]
+• [assunto 2 — máximo 1 frase objetiva]
 
-        Nº da Ata:          ____________________
-        Data:               ____________________
-        Participantes:      ____________________
-        Responsável pela reunião: ____________________
-        Hora início:        ____________________
-        Hora fim:           ____________________
+Decisões tomadas:
+• [decisão 1 — apenas o que foi explicitamente decidido]
+• [omitir] se nenhuma decisão foi registrada
 
-        Pauta da reunião:   ____________________
-        
-        Tópicos discutidos:
-        • [resumo muito objetivo do que foi efetivamente falado – 1 linha por tópico principal]
-        • [omitir] quando não for possível identificar com clareza
+Ações e responsáveis:
+• [ação] — Responsável: [nome ou omitir] — Prazo: [prazo ou omitir]
+• [omitir] se nenhuma ação foi registrada
 
-        Decisões tomadas durante a reunião:
-        • [apenas o que foi dito explicitamente como decidido]
-        • [omitir] se não houver decisão clara registrada
-
-        Ações a realizar e etapas seguintes:
-        • [Ação descrita] – Responsável: [nome/persona exata dita ou [omitir]] – Prazo: [prazo dito ou [omitir]]
-        • [omitir] quando não houver ação clara com responsável e/ou prazo
-
-        Agora processe APENAS o conteúdo da transcrição acima e preencha SOMENTE os campos:
-        - Pauta da reunião
-        - Tópicos discutidos
-        - Decisões tomadas durante a reunião
-        - Ações a realizar e etapas seguintes
-
-        Deixe todos os campos do cabeçalho exatamente como estão (com ____________________).
-
-        Responda SOMENTE com a ata formatada, sem nenhuma frase antes ou depois.
-        """
+TRANSCRIÇÃO DA REUNIÃO:
+{text_content}
+[/INST]"""
 
         response = requests.post(
             f'{ollama_host}/api/generate',
             json={
-                "model": "llama3.2:latest", # Se o erro 500 persistir, considere mudar para llama3.2:3b
+                "model": "llama3.2:latest",
                 "prompt": prompt,
                 "stream": False,
-                "options": { "temperature": 0.2 } 
+                "options": {
+                    "temperature": 0,
+                    "top_p": 0.9,
+                    "repeat_penalty": 1.3
+                }
             },
             timeout=ollama_timeout
         )

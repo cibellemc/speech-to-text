@@ -48,10 +48,11 @@ def load_models(whisper_model_name, hf_token):
     # Carrega Whisper
     whisper_model = whisper.load_model(whisper_model_name, device=device)
 
-    # Carrega Pipeline Community-1
+    # Carrega Pipeline — speaker-diarization-3.1 é compatível com pyannote.audio 3.3.x
+    # (community-1 exige pyannote 4.x e tem parâmetros diferentes como plda)
     pyannote_pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-community-1",
-        token=hf_token
+        "pyannote/speaker-diarization-3.1",
+        use_auth_token=hf_token
     )
     if pyannote_pipeline:
         pyannote_pipeline.to(torch.device(device))
