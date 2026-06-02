@@ -96,23 +96,24 @@ def register_page():
     """Página de registro"""
     st.title("Registrar novo usuário")
     
-    with st.form("register_form"):
-        username = st.text_input("Nome de usuário")
-        # email = st.text_input("Email")
-        password = st.text_input("Senha", type="password")
-        confirm_password = st.text_input("Confirmar senha", type="password")
-        submit = st.form_submit_button("Registrar")
+    # with st.form("register_form"):
+    #     username = st.text_input("Nome de usuário")
+    #     # email = st.text_input("Email")
+    #     password = st.text_input("Senha", type="password")
+    #     confirm_password = st.text_input("Confirmar senha", type="password")
+    #     submit = st.form_submit_button("Registrar")
         
-        if submit:
-            if password != confirm_password:
-                st.error("As senhas não coincidem")
-            elif len(password) < 8:
-                st.error("A senha deve ter pelo menos 8 caracteres")
-            else:
-                # if create_user(username, email, password):
-                if create_user(username, password):
+    #     if submit:
+    #         if password != confirm_password:
+    #             st.error("As senhas não coincidem")
+    #         elif len(password) < 8:
+    #             st.error("A senha deve ter pelo menos 8 caracteres")
+    #         else:
+    #             # if create_user(username, email, password):
+    #             if create_user(username, password):
 
-                    st.success("Usuário criado com sucesso! Faça login para continuar.")
+    #                 st.success("Usuário criado com sucesso! Faça login para continuar.")
+    st.info("Cadastro de usuários desabilitado. Contate o administrador para criar uma conta.")
 
 def login():
     """Página principal de autenticação"""
