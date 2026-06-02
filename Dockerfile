@@ -12,7 +12,7 @@ RUN apt-get update && \
 RUN pip install --upgrade pip
 
 # PyTorch CPU-only (~200MB vs ~2GB da versão CUDA)
-RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+RUN pip install torch==2.4.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cpu
 
 WORKDIR /app
 
