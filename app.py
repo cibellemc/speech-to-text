@@ -14,6 +14,7 @@ from views.select import (
     save_minutes_to_db,
     generate_minutes_docx,
     generate_transcription_docx,
+    generate_unified_docx,
     display_unified_history
 )
 
@@ -139,19 +140,35 @@ def process_audio(input_file, whisper_model, is_automatic):
                         save_minutes_to_db(user_id, t_id, m_file_name, summary, "llama3.2", "automatic")
                         
                         st.success("Processamento completo!")
+                        
                         st.markdown("### Ata Gerada:")
                         st.write(summary)
+                        st.markdown("### Transcrição Gerada:")
+                        if len(text_content) > 2000:
+                            st.write(text_content[:2000] + "...")
+                        else:
+                            st.write(text_content)
                         
-                        docx_bio = generate_minutes_docx(input_file.name, summary)
-                        st.download_button("Baixar Ata Final", docx_bio, m_file_name)
+                        docx_unified = generate_unified_docx(input_file.name, summary, segments)
+                        u_file_name = f"ata_e_transcricao_{input_file.name}_{date_str}.docx"
+                        st.download_button("Baixar Ata + Transcrição", docx_unified, u_file_name, use_container_width=True)
                     except Exception as ai_error:
                         st.error(f"Transcrição concluída, mas a Ata falhou: {ai_error}")
                         st.info("Você pode baixar a transcrição abaixo ou tentar gerar a ata no menu 'Apenas Ata'.")
+                        st.markdown("### Transcrição Gerada:")
+                        if len(text_content) > 2000:
+                            st.write(text_content[:2000] + "...")
+                        else:
+                            st.write(text_content)
                         docx_trans = generate_transcription_docx(segments, t_file_name)
                         st.download_button("Baixar Transcrição", docx_trans, t_file_name)
             else:
                 docx_bio = generate_transcription_docx(segments, t_file_name)
                 st.success("Transcrição concluída!")
+                if len(text_content) > 2000:
+                    st.write(text_content[:2000] + "...")
+                else:
+                    st.write(text_content)
                 st.download_button("Baixar Transcrição para Edição", docx_bio, t_file_name)
 
     except Exception as e:
