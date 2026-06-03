@@ -416,6 +416,27 @@ def generate_minutes_docx(audio_name, summary):
     bio.seek(0)
     return bio
 
+def generate_unified_docx(audio_name, summary, segments):
+    """Gera um único DOCX contendo a Ata e a Transcrição unificadas"""
+    from transcriber import format_timestamp
+    doc = docx.Document()
+    
+    doc.add_heading(f'Ata de Reunião: {audio_name}', level=1)
+    doc.add_paragraph(summary)
+    
+    doc.add_page_break()
+    
+    doc.add_heading('Transcrição Completa', level=1)
+    for seg in segments:
+        p = doc.add_paragraph()
+        p.add_run(f"{format_timestamp(seg['start'])} {seg['speaker']}: ").bold = True
+        p.add_run(seg['text'])
+        
+    bio = io.BytesIO()
+    doc.save(bio)
+    bio.seek(0)
+    return bio
+
 def main():
     user_id = st.session_state.get("user_id")
     if user_id:
